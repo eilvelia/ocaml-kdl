@@ -2,11 +2,10 @@ opam-version: "2.0"
 name: "kdl"
 version: "0.0.0"
 synopsis: "An implementation of the KDL document laguage"
-description: "An implementation of the KDL document laguage"
-maintainer: "bannerets <comonoid@protonmail.com>"
-authors: "bannerets <comonoid@protonmail.com>"
+maintainer: "github.com/Bannerets <comonoid@protonmail.com>"
+authors: "github.com/Bannerets <comonoid@protonmail.com>"
 license: "MIT"
-tags: ["document-language" "configuration-language" "serialization-language"]
+tags: ["configuration-language" "serialization-language"]
 homepage: "https://github.com/Bannerets/ocaml-kdl"
 bug-reports: "https://github.com/Bannerets/ocaml-kdl/issues"
 dev-repo: "git+https://github.com/Bannerets/ocaml-kdl.git"
@@ -21,7 +20,6 @@ depends: [
   "odoc" {with-doc}
 ]
 build: [
-  ["dune" "subst"] {dev}
   [
     "dune"
     "build"
