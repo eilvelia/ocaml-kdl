@@ -272,8 +272,8 @@ let%test_module "numbers" = (module struct
        (e (float -300))) |}]
 
   let%expect_test "hexadecimal prefix" =
-    test {|- 0x0523f15; - -0xdead_f00d; - 0xDEAD_F00D|};
-    [%expect {| ((- (int 5390101)) (- (int -3735941133)) (- (int 3735941133))) |}]
+    test {|- 0x0523f15; - -0xead_f00d; - 0xEAD_F00D|};
+    [%expect {| ((- (int 5390101)) (- (int -246280205)) (- (int 246280205))) |}]
 
   let%expect_test "octal prefix" =
     test {|- 0o713_; - -0o755|};
