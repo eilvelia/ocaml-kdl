@@ -40,13 +40,21 @@ let equal_annot_value (annot1, v1 : annot_value) (annot2, v2 : annot_value) =
 let equal_prop (name1, annot_value1 : prop) (name2, annot_value2 : prop) =
   String.equal name1 name2 && equal_annot_value annot_value1 annot_value2
 
+(* This is the implementation of List.equal from OCaml 4.14.0, present
+   for backward compatibility with OCaml < 4.12.0 *)
+let rec list_equal eq l1 l2 =
+  match l1, l2 with
+  | [], [] -> true
+  | [], _ :: _ | _ :: _, [] -> false
+  | a1 :: l1, a2 :: l2 -> eq a1 a2 && list_equal eq l1 l2
+
 let equal_node n1 n2 =
   String.equal n1.name n2.name
   && Option.equal String.equal n1.annot n2.annot
-  && List.equal equal_annot_value n1.args n2.args
-  && List.equal equal_prop n1.props n2.props
+  && list_equal equal_annot_value n1.args n2.args
+  && list_equal equal_prop n1.props n2.props
 
-let equal nodes1 nodes2 = List.equal equal_node nodes1 nodes2
+let equal nodes1 nodes2 = list_equal equal_node nodes1 nodes2
 
 let sexp_of_value = function
   | `String str -> Sexp.List [Atom "string"; Atom str]
