@@ -1,0 +1,13 @@
+(menhir
+ (modules parser))
+
+; (rule
+;  (target parser_messages.ml)
+;  (deps parser.messages parser.mly)
+;  (action (with-stdout-to %{target} (run menhir --compile-errors %{deps}))))
+
+(library
+ (public_name kdl)
+ (name kdl)
+ (libraries menhirLib sedlex sexplib0)
+ (preprocess (per_module ((pps sedlex.ppx) lexer))))

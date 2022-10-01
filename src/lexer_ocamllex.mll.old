@@ -1,0 +1,109 @@
+{
+  open Lexing
+  open Parser
+
+  let error lexbuf err =
+    let loc = Loc.make (lexeme_start_p lexbuf) (lexeme_end_p lexbuf) in
+    raise @@ Err.CustomLexingError (err, loc)
+}
+
+let bom = '\239' '\187' '\191'
+
+let unicode_space =
+    '\t'                 (* Character Tabulation U+0009 *)
+  | ' '                  (* Space U+0020 *)
+  | '\194' '\160'        (* No-Break-Space U+00A0 *)
+  | '\225' '\154' '\128' (* Ogham Space Mark U+1680 *)
+  | '\226' '\128' '\128' (* En Quad	U+2000 *)
+  | '\226' '\128' '\129' (* Em Quad U+2001 *)
+  | '\226' '\128' '\130' (* En Space U+2002 *)
+  | '\226' '\128' '\131' (* Em Space U+2003 *)
+  | '\226' '\128' '\132' (* Three-Per-Em Space U+2004 *)
+  | '\226' '\128' '\133' (* Four-Per-Em Space U+2005 *)
+  | '\226' '\128' '\134' (* Six-Per-Em Space U+2006 *)
+  | '\226' '\128' '\135' (* Figure Space U+2007 *)
+  | '\226' '\128' '\136' (* Punctuation Space U+2008 *)
+  | '\226' '\128' '\137' (* Thin Space U+2009 *)
+  | '\226' '\128' '\138' (* Hair Space U+200A *)
+  | '\226' '\128' '\128' (* Narrow No-Break Space U+202F *)
+  | '\226' '\128' '\175' (* Medium Mathematical Space U+205F *)
+  | '\227' '\128' '\128' (* Ideographic Space U+3000 *)
+
+let ws = unicode_space+
+
+let newline =
+    "\r\n"               (* CRLF Carriage Return and Line Feed U+000D U+000A *)
+  | '\r'                 (* CR   Carriage Return U+000D *)
+  | '\n'                 (* LF   Line Feed U+000A *)
+  | '\194' '\133'        (* NEL  Next Line U+0085 *)
+  | '\012'               (* FF   Form Feed U+000C *)
+  | '\226' '\128' '\168' (* LS   Line Separator U+2028 *)
+  | '\226' '\128' '\168' (* PS   Paragraph Separator U+2029 *)
+
+let hex_digit = ['0'-'9' 'a'-'f' 'A'-'F']
+
+let sign = ['-' '+']
+
+let decimal_nat = ['0'-'9'] ['0'-'9' '_']*
+let exponent = ['e' 'E'] sign? decimal_nat
+
+let decimal_int = sign? decimal_nat
+let decimal_float = sign? decimal_nat ('.' decimal_nat exponent? | exponent)
+let hex = sign? "0x" hex_digit (hex_digit | '_')*
+let octal = sign? "0o" ['0'-'7'] ['0'-'7' '_']*
+let binary = sign? "0b" ['0' '1'] ['0' '1' '_']*
+
+let integer = decimal_int | hex | octal | binary
+let float = decimal_float
+
+(* Disallowed:
+   Any codepoint with hexadecimal value 0x20 or below
+   Any codepoint with hexadecimal value higher than 0x10FFFF
+   Any of {| \/(){}<>;[]=," |} *)
+let identchar = [^ '\\' '/' '(' ')' '{' '}' '<' '>' ';' '[' ']' '=' ',' '"'
+' ' '\n' '\r' '\000'-'\020']
+let startident = identchar # ['0'-'9']
+
+(* TODO: save base in numbers as well? *)
+
+rule main = parse
+  | eof { EOF }
+  | ws { main lexbuf }
+  | newline { new_line lexbuf; NEWLINE }
+  | "//" { line_comment lexbuf }
+  | "/*" { comment 0 lexbuf; main lexbuf }
+  | "/-" { DISABLE }
+  | "\\" { line_cont lexbuf }
+  | ';' { SEMI }
+  | '(' { LPAREN }
+  | ')' { RPAREN }
+  | '{' { LBRACE }
+  | '}' { RBRACE }
+  | '=' { EQ }
+  | "true" { TRUE }
+  | "false" { FALSE }
+  | "null" { NULL }
+  | integer as i { INTEGER i }
+  | float as f { FLOAT (float_of_string f) }
+  | '-' startident identchar* as str { IDENT str }
+  | '-' { IDENT "-" }
+  | (startident # '-') identchar* as str { IDENT str }
+  | _ as ch { error lexbuf @@ Printf.sprintf "Illegal character '%c'" ch }
+
+and line_cont = parse
+  | ws { line_cont lexbuf }
+  | "//" { line_comment lexbuf }
+  | newline { new_line lexbuf; main lexbuf }
+  | _ { error lexbuf "Illegal character in line continuation" }
+
+and comment depth = parse
+  | newline { new_line lexbuf; comment depth lexbuf }
+  | "/*" { comment (depth + 1) lexbuf }
+  | "*/" { if depth = 0 then () else comment (depth - 1) lexbuf }
+  | eof { error lexbuf "Unterminated comment" }
+  | _ { comment depth lexbuf }
+
+and line_comment = parse
+  | newline { new_line lexbuf; main lexbuf }
+  | eof { EOF }
+  | _ { line_comment lexbuf }

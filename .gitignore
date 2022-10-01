@@ -1,0 +1,10 @@
+_build/
+_opam/
+.merlin
+*.install
+*.conflicts
+*.corrected
+*.dump
+_coverage/
+*.bak
+/*.txt
