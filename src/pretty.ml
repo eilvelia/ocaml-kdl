@@ -41,11 +41,14 @@ let pp_ident fmt str =
   pp_print_bytes fmt result;
   if quoted then Format.pp_print_char fmt '"'
 
+let[@inline] count_escape str =
+  (* Note: String.fold_left is not available in OCaml < 4.13 *)
+  let result = ref 0 in
+  String.iter (function '\\' | '"' -> incr result | _ -> ()) str;
+  !result
+
 let pp_string_value fmt str =
-  let result_len = String.fold_left
-    (fun l -> function '\\' | '"' -> l + 1 | _ -> l)
-    (String.length str) str in
-  let result = Bytes.create result_len in
+  let result = Bytes.create (String.length str + count_escape str) in
   escape str result;
   Format.pp_print_char fmt '"';
   pp_print_bytes fmt result;
