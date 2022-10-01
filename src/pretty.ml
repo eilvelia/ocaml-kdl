@@ -1,5 +1,9 @@
 open Ast
 
+(* Format.pp_print_bytes is available in OCaml >= 4.13.0 only *)
+let pp_print_bytes fmt bytes =
+  Format.pp_print_string fmt (Bytes.unsafe_to_string bytes)
+
 let is_keyword = function
   | "true" | "false" | "null" -> true
   | _ -> false
@@ -34,7 +38,7 @@ let pp_ident fmt str =
   if quoted then Format.pp_print_char fmt '"';
   let result = Bytes.create (String.length str + !escape_len) in
   escape str result;
-  Format.pp_print_bytes fmt result;
+  pp_print_bytes fmt result;
   if quoted then Format.pp_print_char fmt '"'
 
 let pp_string_value fmt str =
@@ -44,7 +48,7 @@ let pp_string_value fmt str =
   let result = Bytes.create result_len in
   escape str result;
   Format.pp_print_char fmt '"';
-  Format.pp_print_bytes fmt result;
+  pp_print_bytes fmt result;
   Format.pp_print_char fmt '"'
 
 let pp_value fmt : [< value] -> _ = function
