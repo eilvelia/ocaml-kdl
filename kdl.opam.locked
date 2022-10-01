@@ -1,0 +1,81 @@
+opam-version: "2.0"
+name: "kdl"
+version: "0.0.0"
+synopsis: "An implementation of the KDL document laguage"
+description: "An implementation of the KDL document laguage"
+maintainer: "bannerets <comonoid@protonmail.com>"
+authors: "bannerets <comonoid@protonmail.com>"
+license: "MIT"
+tags: ["document-language" "configuration-language" "serialization-language"]
+homepage: "https://github.com/Bannerets/ocaml-kdl"
+bug-reports: "https://github.com/Bannerets/ocaml-kdl/issues"
+depends: [
+  "astring" {= "0.8.5" & with-doc}
+  "base" {= "v0.15.0" & with-test}
+  "base-bigarray" {= "base"}
+  "base-bytes" {= "base"}
+  "base-threads" {= "base"}
+  "base-unix" {= "base"}
+  "camlp-streams" {= "5.0.1" & with-doc}
+  "cmdliner" {= "1.1.1" & with-doc}
+  "cppo" {= "1.6.9" & with-doc}
+  "csexp" {= "1.5.1"}
+  "dune" {= "3.3.1"}
+  "dune-configurator" {= "3.3.1"}
+  "fmt" {= "0.9.0" & with-doc}
+  "fpath" {= "0.7.3" & with-doc}
+  "gen" {= "1.0"}
+  "jane-street-headers" {= "v0.15.0" & with-test}
+  "jst-config" {= "v0.15.1" & with-test}
+  "menhir" {= "20220210"}
+  "menhirLib" {= "20220210"}
+  "menhirSdk" {= "20220210"}
+  "ocaml" {= "4.14.0"}
+  "ocaml-base-compiler" {= "4.14.0"}
+  "ocaml-compiler-libs" {= "v0.12.4"}
+  "ocaml-config" {= "2"}
+  "ocaml-options-vanilla" {= "1"}
+  "ocamlbuild" {= "0.14.1"}
+  "ocamlfind" {= "1.9.5"}
+  "odoc" {= "2.1.1" & with-doc}
+  "odoc-parser" {= "1.0.1" & with-doc}
+  "ppx_assert" {= "v0.15.0" & with-test}
+  "ppx_base" {= "v0.15.0" & with-test}
+  "ppx_cold" {= "v0.15.0" & with-test}
+  "ppx_compare" {= "v0.15.0" & with-test}
+  "ppx_derivers" {= "1.2.1"}
+  "ppx_enumerate" {= "v0.15.0" & with-test}
+  "ppx_expect" {= "v0.15.0" & with-test}
+  "ppx_hash" {= "v0.15.0" & with-test}
+  "ppx_here" {= "v0.15.0" & with-test}
+  "ppx_inline_test" {= "v0.15.0" & with-test}
+  "ppx_optcomp" {= "v0.15.0" & with-test}
+  "ppx_sexp_conv" {= "v0.15.1" & with-test}
+  "ppxlib" {= "0.27.0"}
+  "re" {= "1.10.4" & with-test}
+  "result" {= "1.5" & with-doc}
+  "sedlex" {= "3.0"}
+  "seq" {= "base"}
+  "sexplib0" {= "v0.15.1"}
+  "stdio" {= "v0.15.0" & with-test}
+  "stdlib-shims" {= "0.3.0"}
+  "time_now" {= "v0.15.0" & with-test}
+  "topkg" {= "1.0.5" & with-doc}
+  "tyxml" {= "4.5.0" & with-doc}
+  "uchar" {= "0.0.2"}
+  "uutf" {= "1.0.3" & with-doc}
+]
+build: [
+  ["dune" "subst"] {dev}
+  [
+    "dune"
+    "build"
+    "-p"
+    name
+    "-j"
+    jobs
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
+]
+dev-repo: "git+https://github.com/Bannerets/ocaml-kdl.git"
