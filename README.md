@@ -7,6 +7,10 @@ An OCaml implementation of the [KDL][] 1.0 document language.
 
 [KDL]: https://github.com/kdl-org/kdl
 
+```console
+$ opam install kdl
+```
+
 ## Features
 
 - [x] Parsing
