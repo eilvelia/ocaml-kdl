@@ -1,11 +1,11 @@
 opam-version: "2.0"
 name: "kdl"
 version: "0.1.0"
-synopsis: "An implementation of the KDL document laguage"
+synopsis: "OCaml implementation of the KDL document laguage"
 maintainer: "github.com/Bannerets <comonoid@protonmail.com>"
 authors: "github.com/Bannerets <comonoid@protonmail.com>"
 license: "MIT"
-tags: ["configuration-language" "serialization-language"]
+tags: ["configuration-language" "data-serialization-language"]
 homepage: "https://github.com/Bannerets/ocaml-kdl"
 bug-reports: "https://github.com/Bannerets/ocaml-kdl/issues"
 dev-repo: "git+https://github.com/Bannerets/ocaml-kdl.git"

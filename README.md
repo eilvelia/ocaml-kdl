@@ -16,8 +16,8 @@ $ opam install kdl
 - [x] Parsing
 - [x] Pretty-printing
 - [x] Lenses
-- [ ] The KDL Query Language
-- [ ] The KDL Schema Language
+- [ ] KDL Query Language (KQL)
+- [ ] KDL Schema Language
 - [ ] Preserve formatting when editing
 <!-- - [ ] ppx_deriving_kdl -->
 
@@ -48,7 +48,7 @@ val kdl : (Kdl.t, Kdl.error) result = Ok
          children = []}]}]}]
 ```
 
-Convert to a sexp-expression:
+Convert to a sexp-expression (uses the `sexplib0` library):
 
 ```ocaml
 # Kdl.sexp_of_t kdl |> Sexplib0.Sexp.to_string_hum |> print_endline
@@ -82,12 +82,12 @@ using `|--` or `//`:
 - : string option = Some "This is the second paragraph"
 ```
 
-Additionaly, type-annotated values can be interpreted:
+Additionaly, type-annotated values can be "interpreted":
 
 ```ocaml
 # let parsed = Kdl.from_string_exn "- (u8)220"
-# Kdl.interpret @@ get_exn parsed (node "-" // arg 0)
-- : Kdl.typed_value = `U8 220
+# Kdl.interpret Kdl.L.(get_exn parsed @@ node "-" // arg 0)
+- : [> Kdl.typed_value ] = `U8 220
 ```
 
 For the full list of available functions, see the [mli][] file.

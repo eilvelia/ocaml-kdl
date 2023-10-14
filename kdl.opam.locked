@@ -1,12 +1,11 @@
 opam-version: "2.0"
 name: "kdl"
-version: "0.0.0"
-synopsis: "An implementation of the KDL document laguage"
-description: "An implementation of the KDL document laguage"
-maintainer: "bannerets <comonoid@protonmail.com>"
-authors: "bannerets <comonoid@protonmail.com>"
+version: "0.1.0"
+synopsis: "OCaml implementation of the KDL document laguage"
+maintainer: "github.com/Bannerets <comonoid@protonmail.com>"
+authors: "github.com/Bannerets <comonoid@protonmail.com>"
 license: "MIT"
-tags: ["document-language" "configuration-language" "serialization-language"]
+tags: [ "configuration-language" "data-serialization-language"]
 homepage: "https://github.com/Bannerets/ocaml-kdl"
 bug-reports: "https://github.com/Bannerets/ocaml-kdl/issues"
 depends: [
@@ -20,7 +19,7 @@ depends: [
   "cmdliner" {= "1.1.1" & with-doc}
   "cppo" {= "1.6.9" & with-doc}
   "csexp" {= "1.5.1"}
-  "dune" {= "3.3.1"}
+  "dune" {= "3.9.0"}
   "dune-configurator" {= "3.3.1"}
   "fmt" {= "0.9.0" & with-doc}
   "fpath" {= "0.7.3" & with-doc}
@@ -35,7 +34,7 @@ depends: [
   "ocaml-compiler-libs" {= "v0.12.4"}
   "ocaml-config" {= "2"}
   "ocaml-options-vanilla" {= "1"}
-  "ocamlbuild" {= "0.14.1"}
+  "ocamlbuild" {= "0.14.1" & with-doc}
   "ocamlfind" {= "1.9.5"}
   "odoc" {= "2.1.1" & with-doc}
   "odoc-parser" {= "1.0.1" & with-doc}
@@ -54,7 +53,7 @@ depends: [
   "ppxlib" {= "0.27.0"}
   "re" {= "1.10.4" & with-test}
   "result" {= "1.5" & with-doc}
-  "sedlex" {= "3.0"}
+  "sedlex" {= "3.1"}
   "seq" {= "base"}
   "sexplib0" {= "v0.15.1"}
   "stdio" {= "v0.15.0" & with-test}
@@ -62,20 +61,16 @@ depends: [
   "time_now" {= "v0.15.0" & with-test}
   "topkg" {= "1.0.5" & with-doc}
   "tyxml" {= "4.5.0" & with-doc}
-  "uchar" {= "0.0.2"}
   "uutf" {= "1.0.3" & with-doc}
 ]
 build: [
-  ["dune" "subst"] {dev}
-  [
-    "dune"
-    "build"
-    "-p"
-    name
-    "-j"
-    jobs
-    "@runtest" {with-test}
-    "@doc" {with-doc}
-  ]
+  "dune"
+  "build"
+  "-p"
+  name
+  "-j"
+  jobs
+  "@runtest" {with-test}
+  "@doc" {with-doc}
 ]
 dev-repo: "git+https://github.com/Bannerets/ocaml-kdl.git"

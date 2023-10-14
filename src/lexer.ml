@@ -3,7 +3,7 @@ open Printf
 
 let error msg = raise @@ Err.CustomLexingError msg
 
-(* [Compl] doesn't seem to work *)
+(* Note: [Compl] doesn't seem to work *)
 let space_chars = [%sedlex.regexp?
     '\t'   (* Character Tabulation U+0009 *)
   | ' '    (* Space U+0020 *)
