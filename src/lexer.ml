@@ -206,6 +206,7 @@ let rec main lexbuf =
     Buffer.reset string_buffer;
     set_string_start lexbuf;
     string lexbuf
+  | "r#", Star identchar -> error "An identifier cannot start with r#"
   | '-', startident, Star identchar -> IDENT (Sedlexing.Utf8.lexeme lexbuf)
   | '-' -> IDENT "-"
   | Sub (startident, '-'), Star identchar -> IDENT (Sedlexing.Utf8.lexeme lexbuf)

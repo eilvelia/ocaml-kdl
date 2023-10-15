@@ -139,6 +139,23 @@ let%expect_test "(raw) string literals as a property name" =
   test {|- "key\n"="value" r##"key\t"##=true|};
   [%expect {| (- ("key\n" (string value)) ("key\\t" true)) |}]
 
+let%expect_test "identifiers cannot start with r#" =
+  test {|- r#=0|};
+  test {|- r#a=1|};
+  test {|- r#<=1|};
+  [%expect {|
+    Error: :1:3-1:5: An identifier cannot start with r#
+    Error: :1:3-1:6: An identifier cannot start with r#
+    Error: :1:3-1:5: An identifier cannot start with r# |}]
+
+let%expect_test "identifiers cannot contain special characters (<, etc.)" =
+  test {|- a<=1|};
+  [%expect {| Error: :1:4-1:5: Illegal character '<' |}]
+
+let%expect_test "-- as an identifier" =
+  test {|- --=0|};
+  [%expect {| (- (-- (int 0))) |}]
+
 let%expect_test "single-line comments" =
   test {|node // comment // commment
         // comment node|};
