@@ -145,7 +145,6 @@ let%expect_test "single-line comments" =
   [%expect {| (node) |}]
 
 let%expect_test "single-line comments can be empty" =
-  (* This is non-standard for now *)
   test {|node //|};
   [%expect {| (node) |}]
 
@@ -348,9 +347,9 @@ let%test_module "strings" = (module struct
     [%expect {| Error: :1:19-1:19: Unterminated raw string |}]
 
   let%expect_test "escapes" =
-    test {|- "\"\\\/\b\f\n\r\t"|};
+    test {|- "\"\\\b\f\n\r\t"|};
     [%expect {|
-      (- (string  "\"\\/\b\012\
+      (- (string  "\"\\\b\012\
                  \n\r\t")) |}]
 
   let%expect_test "escapes should not be interpreted in a raw string" =

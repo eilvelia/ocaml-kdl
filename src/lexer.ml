@@ -137,7 +137,6 @@ let rec string lexbuf =
   | "\\r" -> Buffer.add_char string_buffer '\r'; string lexbuf
   | "\\t" -> Buffer.add_char string_buffer '\t'; string lexbuf
   | "\\\\" -> Buffer.add_char string_buffer '\\'; string lexbuf
-  | "\\/" -> Buffer.add_char string_buffer '/'; string lexbuf
   | "\\\"" -> Buffer.add_char string_buffer '"'; string lexbuf
   | "\\b" -> Buffer.add_char string_buffer '\b'; string lexbuf
   | "\\f" -> Buffer.add_char string_buffer '\012'; string lexbuf

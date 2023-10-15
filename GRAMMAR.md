@@ -49,7 +49,7 @@ float ::= dec-float
 raw-string ::= "r" <any number of #> '"' <any-char>* '"' <the same number of #>
 string ::= '"' string-character* '"'
 string-character ::= <any-regular-char>
-                   | "\n" | "\r" | "\t" | "\\" | "\/" | '\"' | "\b" | "\f"
+                   | "\n" | "\r" | "\t" | "\\" | '\"' | "\b" | "\f"
                    | "\u{" hex-digit{1,6} "}"
 ```
 
