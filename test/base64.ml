@@ -1,7 +1,9 @@
 let test encoded =
-  match Kdl.base64 (Some "base64", `String encoded) with
-  | Some bytes -> print_bytes bytes; print_newline ()
-  | None -> failwith "Expected `Base64"
+  match Kdl.interpret (Some "base64", `String encoded) with
+  | `Base64 bytes -> print_bytes bytes; print_newline ()
+  | exception Kdl.Invalid_annotation descr ->
+    Printf.printf "Invalid_annotation: %s\n" descr
+  | _ -> failwith "Expected `Base64"
 
 let%expect_test "4 bytes without padding" =
   test {|TWFu|};
@@ -47,11 +49,11 @@ let%expect_test "a larger sentence" =
     The quick brown fox jumps over the lazy dog |}]
 
 let%expect_test "padding cannot be >= 3" =
-  try test {|Y|} with Failure msg -> Printf.printf "Failure: %s\n" msg;
-  try test {|TWFuY|} with Failure msg -> Printf.printf "Failure: %s\n" msg;
+  test {|Y|};
+  test {|TWFuY|};
   [%expect {|
-    Failure: Invalid base64: a padding of 3 sextets is invalid
-    Failure: Invalid base64: a padding of 3 sextets is invalid |}]
+    Invalid_annotation: Invalid base64: a padding of 3 sextets is invalid
+    Invalid_annotation: Invalid base64: a padding of 3 sextets is invalid |}]
 
 let%expect_test "empty string" =
   test {||};

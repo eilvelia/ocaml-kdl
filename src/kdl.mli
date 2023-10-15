@@ -181,11 +181,16 @@ type typed_value =
   | `Other of string * value
   | `Unannotated of value ]
 
-val interpret : annot_value -> [> typed_value]
-(** Interpret a type-annotated value. [f32] is currently the same as [f64].
+exception Invalid_annotation of string
 
-    @raise Failure if a value is invalid. For example, if the value is
-    annotated as "u8" but exceeds the range of u8, [Failure] is raised. *)
+val interpret : annot_value -> [> typed_value]
+(** Interpret a type-annotated value.
+
+    Note: [f32] is currently the same as [f64].
+
+    @raise Invalid_annotation if the value is invalid. For example, if the value
+    is annotated as "u8" but exceeds the range of u8, [Invalid_annotation] is
+    raised. *)
 
 val i8 : annot_value -> int option
 (** Interpret a value with the "i8" type annotation as [int]. *)
