@@ -11,9 +11,17 @@ let get a lens = lens.get a
 
 let set a v lens = lens.set v a
 
-let get_exn a lens = Option.get @@ lens.get a
+let error () = failwith "Lens failed to match"
 
-let set_exn a v lens = Option.get @@ lens.set v a
+let get_exn a lens =
+  match lens.get a with
+  | Some v -> v
+  | None -> error ()
+
+let set_exn a v lens =
+  match lens.set v a with
+  | Some v -> v
+  | None -> error ()
 
 (* update can be added to the definition of [lens] to increase performance with
    more specialized implementations *)

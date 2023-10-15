@@ -221,10 +221,12 @@ module L : sig
   (** Run the setter ([lens.set]). *)
 
   val get_exn : 'a -> ('a, 'b) lens -> 'b
-  (** [get_exn a l] is [Option.get (get a l)]. *)
+  (** [get_exn a l] is a raising version of [get a l].
+      @raise Failure *)
 
   val set_exn : 'a -> 'b -> ('a, 'b) lens -> 'a
-  (** [set_exn a v l] is [Option.get (set a v l)]. *)
+  (** [set_exn a v l] is a raising version of [set a v l].
+      @raise Failure *)
 
   val (.@()) : 'a -> ('a, 'b) lens -> 'b option
   (** [(.@())] is an indexing operator for [get]. *)
