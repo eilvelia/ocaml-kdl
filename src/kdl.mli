@@ -192,46 +192,6 @@ val interpret : annot_value -> [> typed_value]
     is annotated as "u8" but exceeds the range of u8, [Invalid_annotation] is
     raised. *)
 
-val i8 : annot_value -> int option
-(** Interpret a value with the "i8" type annotation as [int]. *)
-
-val i16 : annot_value -> int option
-(** Interpret a value with the "i16" type annotation as [int]. *)
-
-val i32 : annot_value -> int32 option
-(** Interpret a value with the "i32" type annotation as [int32]. *)
-
-val i64 : annot_value -> int64 option
-(** Interpret a value with the "i64" type annotation as [int64]. *)
-
-val u8 : annot_value -> int option
-(** Interpret a value with the "u8" type annotation as [int]. *)
-
-val u16 : annot_value -> int option
-(** Interpret a value with the "u16" type annotation as [int]. *)
-
-val u32 : annot_value -> int32 option
-(** Interpret a value with the "u32" type annotation as [int32]. *)
-
-val u64 : annot_value -> int64 option
-(** Interpret a value with the "u64" type annotation as [int64]. *)
-
-val isize : annot_value -> nativeint option
-(** Interpret a value with the "isize" type annotation as [nativeint]. *)
-
-val usize : annot_value -> nativeint option
-(** Interpret a value with the "usize" type annotation as [nativeint]. *)
-
-val f32 : annot_value -> float option
-(** Interpret a value with the "f32" type annotation as [float]. *)
-
-val f64 : annot_value -> float option
-(** Interpret a value with the "f64" type annotation as [float]. *)
-
-val base64 : annot_value -> bytes option
-(** Interpret a value with the "base64" type annotation,
-    decoding the base64 string into [bytes]. *)
-
 (** {1 Lenses} *)
 
 module L : sig
