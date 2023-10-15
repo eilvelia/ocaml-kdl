@@ -10,7 +10,7 @@ homepage: "https://github.com/Bannerets/ocaml-kdl"
 bug-reports: "https://github.com/Bannerets/ocaml-kdl/issues"
 dev-repo: "git+https://github.com/Bannerets/ocaml-kdl.git"
 depends: [
-  "ocaml" {>= "4.08"}
+  "ocaml" {>= "4.10"}
   "dune" {>= "3.0"}
   "menhir"
   "menhirLib"
