@@ -6,6 +6,7 @@ let error msg = raise @@ Err.CustomLexingError msg
 (* Note: [Compl] doesn't seem to work *)
 let space_chars = [%sedlex.regexp?
     '\t'   (* Character Tabulation U+0009 *)
+  | 0x000B (* Line Tabulation U+000B *)
   | ' '    (* Space U+0020 *)
   | 0x00A0 (* No-Break-Space U+00A0 *)
   | 0x1680 (* Ogham Space Mark U+1680 *)
