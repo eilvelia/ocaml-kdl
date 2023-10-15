@@ -5,6 +5,8 @@
 - Updated to KDL v2.0:
 - - Added Line Tabulation U+000B to whitespace characters
 - - Removed `\/` from escape sequences
+- - Added whitespace escape sequence: all whitespace (including multiple
+    newlines) is removed after `\`
 - - Identifiers cannot start with `r#` anymore
 - Dropped support for OCaml < 4.10.0
 

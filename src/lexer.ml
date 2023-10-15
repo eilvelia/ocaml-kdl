@@ -105,6 +105,12 @@ let rec line_comment lexbuf =
   | any -> line_comment lexbuf
   | _ -> assert false
 
+let rec whitespace_escape lexbuf =
+  match%sedlex lexbuf with
+  | newline -> new_line lexbuf; whitespace_escape lexbuf
+  | ws -> whitespace_escape lexbuf
+  | _ -> ()
+
 let rec raw_string hashlen lexbuf =
   match%sedlex lexbuf with
   | newline ->
@@ -141,6 +147,7 @@ let rec string lexbuf =
   | "\\b" -> Buffer.add_char string_buffer '\b'; string lexbuf
   | "\\f" -> Buffer.add_char string_buffer '\012'; string lexbuf
   | "\\u{", Rep (hex_digit, 1 .. 6), '}' ->
+    (* TODO: Disallow 7+ hex digits inside \u{...}? *)
     let code_str =
       Sedlexing.Utf8.sub_lexeme lexbuf 3 (Sedlexing.lexeme_length lexbuf - 4) in
     let code = int_of_string @@ "0x" ^ code_str in
@@ -150,6 +157,9 @@ let rec string lexbuf =
       error "Invalid unicode code point";
     Buffer.add_utf_8_uchar string_buffer (Uchar.unsafe_of_int code);
     string lexbuf
+  | '\\', ws -> whitespace_escape lexbuf; string lexbuf
+  | '\\', newline -> new_line lexbuf; whitespace_escape lexbuf; string lexbuf
+  (* TODO: Should we error in case of invalid escape sequences? *)
   | '"' ->
     STRING (Buffer.contents string_buffer)
   | eof -> error "Unterminated string"

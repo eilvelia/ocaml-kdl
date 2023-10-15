@@ -389,6 +389,28 @@ let%test_module "strings" = (module struct
   let%expect_test "empty \\u{} without the code point" =
     test {|- "\u{}"|};
     [%expect {| (- (string "\\u{}")) |}]
+
+  let%expect_test "whitespace escape should remove space from the string" =
+    test {|- "foo \   bar"|};
+    [%expect {| (- (string "foo bar")) |}]
+
+  let%expect_test "whitespace escape should also remove a newline" =
+    test {|- "foo \
+              bar"|};
+    [%expect {| (- (string "foo bar")) |}]
+
+  let%expect_test "whitespace escape should remove multiple newlines" =
+    (* This behavior is the same as in Rust
+       https://github.com/rust-lang/reference/pull/1042 *)
+    test {|- "foo\
+
+
+            bar"|};
+    [%expect {| (- (string foobar)) |}]
+
+  let%expect_test "whitespace escape preceding space and then newline" =
+    test "- \"foo \\ \n bar\"";
+    [%expect {| (- (string "foo bar")) |}]
 end)
 
 let%test_module "line continuations" = (module struct
