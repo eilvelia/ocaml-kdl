@@ -41,6 +41,9 @@ let (//) = (|--)
 let (.@()) = get
 let (.@()<-) a l v = set a v l
 
+let (.@!()) = get_exn
+let (.@!()<-) a l v = set_exn a v l
+
 let node_name = {
   get = (fun node -> Some node.name);
   set = (fun name node -> Some { node with name })

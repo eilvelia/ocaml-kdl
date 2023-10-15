@@ -233,6 +233,14 @@ module L : sig
   (** [(.@()<-)] is an indexing operator for [set]: it allows one to write
       [document.@(lens) <- value] instead of [set document value lens]. *)
 
+  val (.@!()) : 'a -> ('a, 'b) lens -> 'b
+  (** [(.@!())] is an indexing operator for [get_exn] (raising version of
+      [(.@())]). *)
+
+  val (.@!()<-) : 'a -> ('a, 'b) lens -> 'b -> 'a
+  (** [(.@!()<-)] is an indexing operator for [set_exn] (raising version of
+      [(.@()<-)]). *)
+
   val update : ('b -> 'b option) -> 'a -> ('a, 'b) lens -> 'a option
   (** The combination of [get] and [set]. *)
 

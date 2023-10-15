@@ -82,14 +82,14 @@ let%expect_test "each set 2" =
     node2 false |}]
 
 let%expect_test "the string lens" =
-  print_endline @@ Option.get @@
-    doc.@(top // child_nth 0 // child "paragraph" // arg 0 // value // string);
+  print_endline
+    doc.@!(top // child_nth 0 // child "paragraph" // arg 0 // value // string);
   [%expect {| This is the first paragraph |}]
 
 let%expect_test "the number lens" =
   let doc = Kdl.of_string_exn {|- 3.14|} in
-  Format.printf "%a\n" Kdl.pp_value @@ Option.get @@
-    doc.@(top // arg 0 // value // number);
+  Format.printf "%a\n" Kdl.pp_value
+    doc.@!(top // arg 0 // value // number);
   print @@ doc.@(top // arg 0 // value // number) <- `RawInt "4";
   [%expect {|
     3.14

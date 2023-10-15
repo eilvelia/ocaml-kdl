@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `Kdl.L`: Added `(.@!())` and `(.@!())<-` indexing operators as raising
+  versions of `(.@())` and `(.@()<-)`.
 - Updated to KDL v2.0:
 - - Added Line Tabulation U+000B to whitespace characters
 - - Removed `\/` from escape sequences

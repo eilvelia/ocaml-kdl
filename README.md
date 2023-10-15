@@ -86,7 +86,7 @@ Additionaly, type-annotated values can be "interpreted":
 
 ```ocaml
 # let parsed = Kdl.from_string_exn "- (u8)220"
-# Kdl.interpret Kdl.L.(get_exn parsed @@ node "-" // arg 0)
+# Kdl.interpret Kdl.L.(parsed.@!(node "-" // arg 0))
 - : [> Kdl.typed_value ] = `U8 220
 ```
 
