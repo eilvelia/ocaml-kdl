@@ -146,10 +146,11 @@ let rec string lexbuf =
   | "\\\"" -> Buffer.add_char string_buffer '"'; string lexbuf
   | "\\b" -> Buffer.add_char string_buffer '\b'; string lexbuf
   | "\\f" -> Buffer.add_char string_buffer '\012'; string lexbuf
-  | "\\u{", Rep (hex_digit, 1 .. 6), '}' ->
-    (* TODO: Disallow 7+ hex digits inside \u{...}? *)
+  | "\\u{", Plus hex_digit, '}' ->
     let code_str =
       Sedlexing.Utf8.sub_lexeme lexbuf 3 (Sedlexing.lexeme_length lexbuf - 4) in
+    if String.length code_str > 6 then
+      error "Invalid unicode code point, cannot contain more than 6 hex digits";
     let code = int_of_string @@ "0x" ^ code_str in
     if code > 0x10FFFF then
       error "Invalid unicode code point, cannot be greater than 10FFFF";

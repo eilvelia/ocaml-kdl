@@ -378,9 +378,8 @@ let%test_module "strings" = (module struct
     [%expect {| (- (string "a _ a _ \226\129\159")) |}]
 
   let%expect_test "\\u{...} cannot contain more than 6 hex digits" =
-    (* TODO: Raise an error instead? *)
     test {|- "\u{1234567}"|};
-    [%expect {| (- (string "\\u{1234567}")) |}]
+    [%expect {| Error: :1:4-1:15: Invalid unicode code point, cannot contain more than 6 hex digits |}]
 
   let%expect_test "\\u{...} should not accept a > 0x10FFFF code point" =
     test {|- "\u{11FBBF} _"|};
