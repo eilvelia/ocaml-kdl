@@ -199,12 +199,7 @@ let rec main lexbuf =
   | "false" -> FALSE
   | "null" -> NULL
   | integer -> INTEGER (Sedlexing.Utf8.lexeme lexbuf)
-  | float ->
-    let float_str = Sedlexing.Utf8.lexeme lexbuf in
-    begin match float_of_string_opt float_str with
-    | Some f -> FLOAT f
-    | None -> error @@ sprintf "Invalid float literal %s" float_str
-    end
+  | float -> FLOAT (Sedlexing.Utf8.lexeme lexbuf)
   | (integer | float), Plus identchar ->
     error @@ sprintf "Invalid number literal %s" (Sedlexing.Utf8.lexeme lexbuf)
   | 'r', Star '#', '"' ->

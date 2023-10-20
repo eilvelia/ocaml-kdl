@@ -4,6 +4,8 @@
 
 - `Kdl.L`: Added `(.@!())` and `(.@!())<-` indexing operators as raising
   versions of `(.@())` and `(.@()<-)`.
+- Reworked numbers: added the `Kdl.Num` module,
+  `Kdl.Num.to_{string,float,int,int32,int64,nativeint}` and other functions.
 - Updated to KDL v2.0:
 - - Added Line Tabulation U+000B to whitespace characters.
 - - Removed `\/` from escape sequences.

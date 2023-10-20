@@ -90,7 +90,7 @@ let%expect_test "the number lens" =
   let doc = Kdl.of_string_exn {|- 3.14|} in
   Format.printf "%a\n" Kdl.pp_value
     doc.@!(top // arg 0 // value // number);
-  print @@ doc.@(top // arg 0 // value // number) <- `RawInt "4";
+  print @@ doc.@(top // arg 0 // value // number) <- `Decimal "4.15";
   [%expect {|
     3.14
-    - 4 |}]
+    - 4.15 |}]

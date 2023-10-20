@@ -1,23 +1,101 @@
 (** {1 The definition of a KDL document} *)
 
+module Num : sig
+  (** KDL numbers. *)
+
+  type t =
+    [ `Int of int
+    | `Int_raw of string
+    | `Decimal of string ]
+  (** Numeric KDL value.
+
+      Although the KDL spec does not differentiate integers and floats, a number
+      is parsed as [`Decimal] (stored as string) if it is written in the [e]
+      scientific notation or contains the [.] decimal separator. If an integer
+      is too large for the OCaml [int], it is parsed as [`Int_raw] instead of
+      [`Int]. The strings are not normalized in any way.
+
+      In general, one should not pattern match over specific constructors of the
+      variant, and instead use the [to_*] functions below while matching over
+      [#Kdl.number as num]. *)
+
+  val to_string : [< t ] -> string
+  (** Convert the number to [string]. *)
+
+  val to_float : [< t ] -> float
+  (** Convert the number to [float]. [Failure] might be raised in case
+      [`Int_raw] or [`Decimal] contain an invalid literal, which should not
+      happen if they were constructed by the parsing functions. *)
+
+  val to_int : [< t ] -> int option
+  (** Convert the number to [int]. Results in [None] if [`Int_raw] or
+      [`Decimal] are invalid literals or do not fit in [int], or if [`Decimal]
+      is not a whole number. [`Decimal string] is parsed as [float]. *)
+
+  val to_int_exn : [< t ] -> int
+  (** Raising version of [to_int].
+      @raise Failure *)
+
+  val to_int32 : [< t ] -> int32 option
+  (** Convert the number to [int32]. The [to_int] semantics apply. *)
+
+  val to_int32_exn : [< t ] -> int32
+  (** Raising version of [to_int32].
+      @raise Failure *)
+
+  val to_int64 : [< t ] -> int64 option
+  (** Convert the number to [int64]. The [to_int] semantics apply. *)
+
+  val to_int64_exn : [< t ] -> int64
+  (** Raising version of [to_int64].
+      @raise Failure *)
+
+  val to_nativeint : [< t ] -> nativeint option
+  (** Convert the number to [nativeint]. The [to_int] semantics apply. *)
+
+  val to_nativeint_exn : [< t ] -> nativeint
+  (** Raising version of [to_nativeint].
+      @raise Failure *)
+
+  val to_int_unsigned : [< t ] -> int option
+  (** Unsigned version of the [to_int] conversion. *)
+
+  val to_int32_unsigned : [< t ] -> int32 option
+  (** Unsigned version of the [to_int32] conversion. *)
+
+  val to_int64_unsigned : [< t ] -> int64 option
+  (** Unsigned version of the [to_int64] conversion. *)
+
+  val to_nativeint_unsigned : [< t ] -> nativeint option
+  (** Unsigned version of the [to_nativeint] conversion. *)
+
+  val of_float : float -> [> t ]
+
+  val of_int : int -> [> t ]
+
+  val of_int32 : int32 -> [> t ]
+
+  val of_int64 : int64 -> [> t ]
+
+  val of_nativeint : nativeint -> [> t ]
+
+  val equal : [< t ] -> [< t ] -> bool
+  (** Note that a number value may not necessarily be normalized.
+      [`Decimal string] is parsed as [float]. *)
+end
+
+type number = Num.t
+(** Alias of the [Num.t] polymorphic variant for convenience. *)
+
 type value =
   [ `String of string
-  | `Int of int
-  | `RawInt of string
-  | `Float of float
+  | number
   | `Bool of bool
   | `Null ]
-(** A KDL value.
-
-    Note: Although the KDL spec does not differentiate integers and floats, a
-    number is parsed as [`Float] if it is written in the [e] scientific notation
-    or contains a [.], same as in OCaml. If an integer is too large for the
-    OCaml [int], the integer is parsed as [`RawInt] instead of [`Int]. *)
-
-(*_ TODO: Change to `Number? *)
+(** A KDL value: String, Number, Bool, Null. *)
 
 type annot_value = string option * value
-(** A KDL value with an optional type annotation: [opt_annot * value].
+(** A KDL value with an optional type annotation.
     For example, [(Some "u16", `Int 3201)] is an [annot_value]. *)
 
 type prop = string * annot_value
@@ -195,14 +273,16 @@ val interpret : annot_value -> [> typed_value]
 (** {1 Lenses} *)
 
 module L : sig
-  (** Basic partial lenses for accessing deeply-nested KDL structures.
+  (** Basic partial "lenses" for accessing deeply-nested KDL structures.
 
       Note: These lenses are mostly meant to be used for getting, [set] is
       generally inefficient. *)
 
-  type ('a, 'b) lens =
-    { get : 'a -> 'b option
-    ; set : 'b -> 'a -> 'a option }
+  type ('s, 'a) lens =
+    { get : 's -> 'a option
+    ; set : 'a -> 's -> 's option }
+  (** The partial lens. More formally, it is also known as affine traversal
+      (the combination of lens and prism). *)
 
   val compose : ('b, 'c) lens -> ('a, 'b) lens -> ('a, 'c) lens
   (** Lens composition. *)
@@ -299,40 +379,61 @@ module L : sig
   (** Lens to [annot] in the [annot_value] pair. *)
 
   val annot_opt : (annot_value, string option) lens
-  (** Lens to [annot] as an [option]. Pass [None] to unset the annotation. *)
+  (** Lens to [annot] as [option]. Pass [None] to unset the annotation. *)
 
-  val string : ([> `String of string ], string) lens
+  val string : (value, string) lens
   (** Lens to a string value. *)
 
-  val int : ([> `Int of int ], int) lens
-  (** Lens to an int value. *)
+  val number : (value, number) lens
+  (** Lens to a numeric value. *)
 
-  val raw_int : ([> `RawInt of string ], string) lens
-  (** Lens to a raw int value. *)
+  val string_number : (value, string) lens
+  (** Lens to a numeric value represented as [string]. *)
 
-  val float : ([> `Float of float ], float) lens
-  (** Lens to a float value. *)
+  val float_number : (value, float) lens
+  (** Lens to a numeric value represented as [float]. *)
 
-  val number : (value, [ `Float of float | `Int of int | `RawInt of string ]) lens
-  (** Lens to any numeric KDL value. *)
+  val int_number : (value, int) lens
+  (** Lens to a numeric value represented as [int]. *)
 
-  val bool : ([> `Bool of bool ], bool) lens
+  val int32_number : (value, int32) lens
+  (** Lens to a numeric value represented as [int32]. *)
+
+  val int64_number : (value, int64) lens
+  (** Lens to a numeric value represented as [int64]. *)
+
+  val nativeint_number : (value, nativeint) lens
+  (** Lens to a numeric value represented as [nativeint]. *)
+
+  val bool : (value, bool) lens
   (** Lens to a boolean value. *)
 
-  val null : ([> `Null ], unit) lens
+  val null : (value, unit) lens
   (** Lens to a null value. *)
 
   val string_value : (annot_value, string) lens
   (** [string_value] is [value |-- string]. *)
 
-  val int_value : (annot_value, int) lens
-  (** [int_value] is [value |-- int]. *)
+  val number_value : (annot_value, number) lens
+  (** [number_value] is [value |-- number]. *)
 
-  val raw_int_value : (annot_value, string) lens
-  (** [raw_int_value] is [value |-- raw_int]. *)
+  val string_number_value : (annot_value, string) lens
+  (** [string_number_value] is [value |-- string_number]. *)
 
-  val float_value : (annot_value, float) lens
-  (** [float_value] is [value |-- float]. *)
+  val float_number_value : (annot_value, float) lens
+  (** [float_number_value] is [value |-- float_number]. *)
+
+  val int_number_value : (annot_value, int) lens
+  (** [int_number_value] is [value |-- int_number]. *)
+
+  val int32_number_value : (annot_value, int32) lens
+  (** [int32_number_value] is [value |-- int32_number]. *)
+
+  val int64_number_value : (annot_value, int64) lens
+  (** [int64_number_value] is [value |-- int64_number]. *)
+
+  val nativeint_number_value : (annot_value, nativeint) lens
+  (** [nativeint_number_value] is [value |-- nativeint_number]. *)
 
   val bool_value : (annot_value, bool) lens
   (** [bool_value] is [value |-- bool]. *)

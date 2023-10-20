@@ -17,12 +17,13 @@ let%expect_test "a node without entities" =
 
 let%expect_test "a node with one argument" =
   test {|node 0 |};
-  [%expect {| (node (int 0)) |}]
+  [%expect {| (node (number-int 0)) |}]
 
 let%expect_test "all literals as arguments" =
   test {|node 1 true false "str" 2 r"raw string" null|};
   [%expect {|
-    (node (int 1) true false (string str) (int 2) (string "raw string") null) |}]
+    (node (number-int 1) true false (string str) (number-int 2)
+     (string "raw string") null) |}]
 
 let%expect_test "a node with properties" =
   test {|node key=true foo="bar"|};
@@ -42,11 +43,13 @@ let%expect_test "special symbols are allowed in an identifier" =
 
 let%expect_test "a node terminated with a semicolon" =
   test {|node 2;|};
-  [%expect {| (node (int 2)) |}]
+  [%expect {| (node (number-int 2)) |}]
 
 let%expect_test "several nodes separated by semicolon" =
   test {| node1 true arg1=1; node2 false arg2=2; node3; node4 |};
-  [%expect {| ((node1 true (arg1 (int 1))) (node2 false (arg2 (int 2))) (node3) (node4)) |}]
+  [%expect {|
+    ((node1 true (arg1 (number-int 1))) (node2 false (arg2 (number-int 2)))
+     (node3) (node4)) |}]
 
 let%expect_test "several nodes separated by semicolon and newline" =
   test {|
@@ -95,7 +98,7 @@ let%expect_test "a type-annotated node" =
 let%expect_test "type-annotated values" =
   test {|node (u8)250 (date)"2021-02-03" filter=(regex)r"$\d+"|};
   [%expect {|
-    (node (<type> u8 int 250) (<type> date string 2021-02-03)
+    (node (<type> u8 number-int 250) (<type> date string 2021-02-03)
      (filter (<type> regex string "$\\d+"))) |}]
 
 let%expect_test "cannot use 'true' as a node name" =
@@ -154,7 +157,7 @@ let%expect_test "identifiers cannot contain special characters (<, etc.)" =
 
 let%expect_test "-- as an identifier" =
   test {|- --=0|};
-  [%expect {| (- (-- (int 0))) |}]
+  [%expect {| (- (-- (number-int 0))) |}]
 
 let%expect_test "single-line comments" =
   test {|node // comment // commment
@@ -171,7 +174,7 @@ let%expect_test "multiline comments" =
 
 let%expect_test "multiline comments can be nested" =
   test {|node /* comment /* also a comment */ comment */ 0|};
-  [%expect {| (node (int 0)) |}]
+  [%expect {| (node (number-int 0)) |}]
 
 let%expect_test "multiline comments can wrap lines" =
   test {|node true /*
@@ -193,7 +196,7 @@ let%expect_test "/- can disable a node as a whole" =
     }
     node2 2
     |};
-  [%expect {| ((node1 (int 1)) (node2 (int 2))) |}]
+  [%expect {| ((node1 (number-int 1)) (node2 (number-int 2))) |}]
 
 let%expect_test "/- can disable arguments and properties" =
   test {|mynode /-"commented" "not commented" /-key="value"|};
@@ -250,24 +253,24 @@ let%expect_test "whitespace should not be allowed after a value type annotation"
 
 let%expect_test "redefinition of a property" =
   test {|- a=0 prop=1 prop=2 prop=3 b=4 |};
-  [%expect {| (- (a (int 0)) (prop (int 3)) (b (int 4))) |}]
+  [%expect {| (- (a (number-int 0)) (prop (number-int 3)) (b (number-int 4))) |}]
 
 let%test_module "numbers" = (module struct
   let%expect_test "an integer" =
     test {|node 51235|};
-    [%expect {| (node (int 51235)) |}]
+    [%expect {| (node (number-int 51235)) |}]
 
   let%expect_test "a negative integer" =
     test {|node -30; - -3|};
-    [%expect {| ((node (int -30)) (- (int -3))) |}]
+    [%expect {| ((node (number-int -30)) (- (number-int -3))) |}]
 
   let%expect_test "a large integer" =
     test {|node 12351823951203598125123512041234935|};
-    [%expect {| (node (raw-int 12351823951203598125123512041234935)) |}]
+    [%expect {| (node (number-int-raw 12351823951203598125123512041234935)) |}]
 
   let%expect_test "underscore separators" =
     test {|node 93_33__43_|};
-    [%expect {| (node (int 933343)) |}]
+    [%expect {| (node (number-int 933343)) |}]
 
   let%expect_test "underscore at the beginning is an identifier" =
     test {|_11|};
@@ -275,7 +278,9 @@ let%test_module "numbers" = (module struct
 
   let%expect_test "float literals" =
     test {|node 3.14; node 3___14_.0_01_; node -5.2|};
-    [%expect {| ((node (float 3.14)) (node (float 314.001)) (node (float -5.2))) |}]
+    [%expect {|
+      ((node (number-decimal 3.14)) (node (number-decimal 3___14_.0_01_))
+       (node (number-decimal -5.2))) |}]
 
   let%expect_test "the underscore just after the decimal separator is not allowed" =
     test {|node 3._1|};
@@ -284,16 +289,19 @@ let%test_module "numbers" = (module struct
   let%expect_test "the E notation" =
     test {|a 32e7; b 3e+3; c 2e-3; d 3.43e+4; e -3E2|};
     [%expect {|
-      ((a (float 320000000)) (b (float 3000)) (c (float 0.002)) (d (float 34300))
-       (e (float -300))) |}]
+      ((a (number-decimal 32e7)) (b (number-decimal 3e+3))
+       (c (number-decimal 2e-3)) (d (number-decimal 3.43e+4))
+       (e (number-decimal -3E2))) |}]
 
   let%expect_test "hexadecimal prefix" =
     test {|- 0x0523f15; - -0xead_f00d; - 0xEAD_F00D|};
-    [%expect {| ((- (int 5390101)) (- (int -246280205)) (- (int 246280205))) |}]
+    [%expect {|
+      ((- (number-int 5390101)) (- (number-int -246280205))
+       (- (number-int 246280205))) |}]
 
   let%expect_test "octal prefix" =
     test {|- 0o713_; - -0o755|};
-    [%expect {| ((- (int 459)) (- (int -493))) |}]
+    [%expect {| ((- (number-int 459)) (- (number-int -493))) |}]
 
   let%expect_test "8 / 9 is an invalid octal digit" =
     test {|- 0o798|};
@@ -301,7 +309,7 @@ let%test_module "numbers" = (module struct
 
   let%expect_test "binary prefix" =
     test {|- 0b0101_0101; - -0b11110|};
-    [%expect {| ((- (int 85)) (- (int -30))) |}]
+    [%expect {| ((- (number-int 85)) (- (number-int -30))) |}]
 
   let%expect_test "the prefix cannot be used in a float literal" =
     test {|- 0x2.3|};
@@ -431,7 +439,7 @@ let%test_module "line continuations" = (module struct
     test {|node k1=1 \ // comment
                 k2=2
            node2|};
-    [%expect {| ((node (k1 (int 1)) (k2 (int 2))) (node2)) |}]
+    [%expect {| ((node (k1 (number-int 1)) (k2 (number-int 2))) (node2)) |}]
 
   let%expect_test "multiline comments should be allowed after \\" =
     test {|
@@ -493,8 +501,8 @@ let%expect_test "the type annotations example" =
     }
   |};
   [%expect {|
-    (numbers (<type> u8 int 10) (<type> i32 int 20)
-     (myfloat (<type> f32 float 1.5))
+    (numbers (<type> u8 number-int 10) (<type> i32 number-int 20)
+     (myfloat (<type> f32 number-decimal 1.5))
      (children
       (strings (<type> uuid string 123e4567-e89b-12d3-a456-426614174000)
        (<type> date string 2021-02-03) (filter (<type> regex string "$\\d+")))

@@ -2,26 +2,24 @@ open Ast
 
 (* we can replace option with result for more detailed errors *)
 
-type ('a, 'b) lens = {
-  get : 'a -> 'b option;
-  set : 'b -> 'a -> 'a option;
+type ('s, 'a) lens = {
+  get : 's -> 'a option;
+  set : 'a -> 's -> 's option;
 }
 
 let get a lens = lens.get a
 
 let set a v lens = lens.set v a
 
-let error () = failwith "Lens failed to match"
-
 let get_exn a lens =
   match lens.get a with
   | Some v -> v
-  | None -> error ()
+  | None -> failwith "Lens failed to match"
 
 let set_exn a v lens =
   match lens.set v a with
   | Some v -> v
-  | None -> error ()
+  | None -> failwith "Lens failed to match"
 
 (* update can be added to the definition of [lens] to increase performance with
    more specialized implementations *)
@@ -88,16 +86,41 @@ let top = {
   set = (fun node -> function _ :: xs -> Some (node :: xs) | [] -> None)
 }
 
-let nth_and_replace n x' list =
-  let found = ref false in
-  (* Note: Unlike List.mapi, this stops iterating when we've found the element *)
-  let[@tail_mod_cons] rec go i = function
-    | [] -> []
-    | _ :: xs when i = n -> found := true; x' :: xs
-    | x :: xs -> x :: go (i + 1) xs
-  in
-  let result = go 0 list in
-  if !found then Some result else None
+open struct
+  let nth_and_replace n x' list =
+    let found = ref false in
+    (* Note: Unlike List.mapi, this stops iterating when we've found the element *)
+    let[@tail_mod_cons] rec go i = function
+      | [] -> []
+      | _ :: xs when i = n -> found := true; x' :: xs
+      | x :: xs -> x :: go (i + 1) xs
+    in
+    let result = go 0 list in
+    if !found then Some result else None
+
+  let find_and_replace f x' list =
+    let f (found, xs) x =
+      if not found && f x then
+        true, x' :: xs
+      else
+        found, x :: xs in
+    let found, list = List.fold_left f (false, []) list in
+    if found then Some (List.rev list) else None
+
+  let filter_and_replace f replace_list list =
+    let found = ref false in
+    let f (replace, result) x =
+      if f x then begin
+        found := true;
+        match replace with
+        | x' :: xs -> xs, x' :: result
+        | [] -> [], x :: result
+      end else
+        replace, x :: result
+    in
+    let _, list = List.fold_left f (replace_list, []) list in
+    if !found then Some (List.rev list) else None
+end
 
 let nth n = {
   get = (fun list -> List.nth_opt list n);
@@ -122,29 +145,6 @@ let prop key = {
     if !found then Some { node with props } else None
   )
 }
-
-let find_and_replace f x' list =
-  let f (found, xs) x =
-    if not found && f x then
-      true, x' :: xs
-    else
-      found, x :: xs in
-  let found, list = List.fold_left f (false, []) list in
-  if found then Some (List.rev list) else None
-
-let filter_and_replace f replace_list list =
-  let found = ref false in
-  let f (replace, result) x =
-    if f x then begin
-      found := true;
-      match replace with
-      | x' :: xs -> xs, x' :: result
-      | [] -> [], x :: result
-    end else
-      replace, x :: result
-  in
-  let _, list = List.fold_left f (replace_list, []) list in
-  if !found then Some (List.rev list) else None
 
 let matches_name ?annot name node =
   node.name = name && (match annot with
@@ -197,24 +197,39 @@ let string = {
   set = (fun value' _value -> Some (`String value'))
 }
 
-let int = {
-  get = (function `Int v -> Some v | _ -> None);
-  set = (fun value' _value -> Some (`Int value'))
+let number : (value, number) lens = {
+  get = (function #number as num -> Some num | _ -> None);
+  set = (fun num _ -> Some (num :> value))
 }
 
-let raw_int = {
-  get = (function `RawInt v -> Some v | _ -> None);
-  set = (fun value' _value -> Some (`RawInt value'))
+let string_number : (value, string) lens = {
+  get = (function #number as num -> Some (Num.to_string num) | _ -> None);
+  set = (fun x _ -> Num.of_string x)
 }
 
-let float = {
-  get = (function `Float v -> Some v | _ -> None);
-  set = (fun value' _value -> Some (`Float value'))
+let float_number : (value, float) lens = {
+  get = (function #number as num -> Some (Num.to_float num) | _ -> None);
+  set = (fun x _ -> Some (Num.of_float x))
 }
 
-let number : (value, [`Int of int | `RawInt of string | `Float of float ]) lens = {
-  get = (function `Int _ | `RawInt _ | `Float _ as v -> Some v | _ -> None);
-  set = (fun v' _v -> Some (v' :> value))
+let int_number : (value, int) lens = {
+  get = (function #number as num -> Num.to_int num | _ -> None);
+  set = (fun x _ -> Some (Num.of_int x))
+}
+
+let int32_number : (value, int32) lens = {
+  get = (function #number as num -> Num.to_int32 num | _ -> None);
+  set = (fun x _ -> Some (Num.of_int32 x))
+}
+
+let int64_number : (value, int64) lens = {
+  get = (function #number as num -> Num.to_int64 num | _ -> None);
+  set = (fun x _ -> Some (Num.of_int64 x))
+}
+
+let nativeint_number : (value, nativeint) lens = {
+  get = (function #number as num -> Num.to_nativeint num | _ -> None);
+  set = (fun x _ -> Some (Num.of_nativeint x))
 }
 
 let bool = {
@@ -228,9 +243,14 @@ let null = {
 }
 
 let string_value : (annot_value, string) lens = value |-- string
-let int_value : (annot_value, int) lens = value |-- int
-let raw_int_value : (annot_value, string) lens = value |-- raw_int
-let float_value : (annot_value, float) lens = value |-- float
+let number_value : (annot_value, number) lens = value |-- number
+let string_number_value : (annot_value, string) lens = value |-- string_number
+let float_number_value : (annot_value, float) lens = value |-- float_number
+let int_number_value : (annot_value, int) lens = value |-- int_number
+let int32_number_value : (annot_value, int32) lens = value |-- int32_number
+let int64_number_value : (annot_value, int64) lens = value |-- int64_number
+let nativeint_number_value : (annot_value, nativeint) lens =
+  value |-- nativeint_number
 let bool_value : (annot_value, bool) lens = value |-- bool
 let null_value : (annot_value, unit) lens = value |-- null
 
@@ -239,12 +259,14 @@ let filter f = {
   set = (fun replace list -> filter_and_replace f replace list)
 }
 
-exception Short_circuit
+open struct
+  exception Short_circuit
 
-let mapm_option f list =
-  let g a = match f a with Some x -> x | None -> raise_notrace Short_circuit in
-  try Some (List.map g list)
-  with Short_circuit -> None
+  let mapm_option f list =
+    let g a = match f a with Some x -> x | None -> raise_notrace Short_circuit in
+    try Some (List.map g list)
+    with Short_circuit -> None
+end
 
 let each l = {
   get = (fun list -> mapm_option l.get list);

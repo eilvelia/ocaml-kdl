@@ -56,9 +56,7 @@ let pp_string_value fmt str =
 
 let pp_value fmt : [< value] -> _ = function
   | `String s -> pp_string_value fmt s
-  | `Int i -> Format.pp_print_int fmt i
-  | `RawInt i -> Format.pp_print_string fmt i
-  | `Float f -> Format.pp_print_float fmt f
+  | #number as num -> Format.pp_print_string fmt (Num.to_string num)
   | `Bool b -> Format.pp_print_bool fmt b
   | `Null -> Format.pp_print_string fmt "null"
 

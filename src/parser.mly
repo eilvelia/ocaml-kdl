@@ -15,7 +15,7 @@ let error loc msg = raise @@ Err.CustomParsingError (msg, loc)
 %token <string> STRING
 %token <string> RAW_STRING
 %token <string> INTEGER
-%token <float> FLOAT
+%token <string> FLOAT
 %token TRUE
 %token FALSE
 %token NULL
@@ -140,18 +140,20 @@ prop_or_arg:
 ;
 
 value:
-  | str=STRING { `String str }
-  | str=RAW_STRING { `String str }
-  | int_str=INTEGER {
-    (* TODO: Even if the input is positive, int_of_string_opt can return a
-       negative integer for 0x / 0o / 0b prefixes instead of using `RawInt as
-       the fallback. We probably want to avoid this behavior and be consistent
-       regardless of the prefix. *)
-    match int_of_string_opt int_str with
+  | value=STRING { `String value }
+  | value=RAW_STRING { `String value }
+  | value=INTEGER {
+    (* Even if the input is positive, int_of_string_opt can return a
+       negative integer for 0x / 0o / 0b prefixes. We probably want to avoid
+       this behavior and be consistent regardless of the prefix. *)
+    let negative = value.[0] = '-' in
+    match int_of_string_opt value with
+    | Some int when int < 0 && not negative -> `Int_raw value
+    | Some int when int > 0 && negative -> `Int_raw value
     | Some int -> `Int int
-    | None -> `RawInt int_str
+    | None -> `Int_raw value
   }
-  | float=FLOAT { `Float float }
+  | value=FLOAT { `Decimal value }
   | TRUE { `Bool true }
   | FALSE { `Bool false }
   | NULL { `Null }

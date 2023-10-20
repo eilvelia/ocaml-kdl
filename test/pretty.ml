@@ -15,7 +15,7 @@ let test_compact str =
 let%expect_test "basic pretty-printing" =
   test {|node 1e3/**/true key="prop" null { inner1 2; inner2 1; }|};
   [%expect {|
-    node 1000. true null key="prop" {
+    node 1e3 true null key="prop" {
       inner1 2
       inner2 1
     } |}]
@@ -50,7 +50,7 @@ let%expect_test "a very long node" =
           inner_node_2 null
          }|};
   [%expect {|
-    long_node 1 2 3 4 true null false 3.2 30000. 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 key="value" {
+    long_node 1 2 3 4 true null false 3.2 3e+4 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 key="value" {
       inner_node 0xffffffffffffffffffffffffffff 257 258 259 260 261 262 263 264 265 272 273 key=(u16)255
       inner_node_2 null
     } |}]
