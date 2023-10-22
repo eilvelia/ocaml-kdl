@@ -22,20 +22,22 @@ let%expect_test "a node with one argument" =
 let%expect_test "all literals as arguments" =
   test {|node 1 true false "str" 2 r"raw string" null|};
   [%expect {|
-    (node (number-int 1) true false (string str) (number-int 2)
-     (string "raw string") null) |}]
+    (node (number-int 1) (bool true) (bool false) (string str) (number-int 2)
+     (string "raw string") (null)) |}]
 
 let%expect_test "a node with properties" =
   test {|node key=true foo="bar"|};
-  [%expect {| (node (key true) (foo (string bar))) |}]
+  [%expect {| (node (prop key (bool true)) (prop foo (string bar))) |}]
 
 let%expect_test "a node with mixed properties and arguments" =
   test {|node true key=true false foo="bar" null|};
-  [%expect {| (node true false null (key true) (foo (string bar))) |}]
+  [%expect {|
+    (node (bool true) (bool false) (null) (prop key (bool true))
+     (prop foo (string bar))) |}]
 
 let%expect_test "- is a valid node name" =
   test {|- true|};
-  [%expect {| (- true) |}]
+  [%expect {| (- (bool true)) |}]
 
 let%expect_test "special symbols are allowed in an identifier" =
   test {|foo123~!@#$%^&*.:'|?+ "weeee"|};
@@ -48,8 +50,8 @@ let%expect_test "a node terminated with a semicolon" =
 let%expect_test "several nodes separated by semicolon" =
   test {| node1 true arg1=1; node2 false arg2=2; node3; node4 |};
   [%expect {|
-    ((node1 true (arg1 (number-int 1))) (node2 false (arg2 (number-int 2)))
-     (node3) (node4)) |}]
+    ((node1 (bool true) (prop arg1 (number-int 1)))
+     (node2 (bool false) (prop arg2 (number-int 2))) (node3) (node4)) |}]
 
 let%expect_test "several nodes separated by semicolon and newline" =
   test {|
@@ -58,11 +60,11 @@ let%expect_test "several nodes separated by semicolon and newline" =
     node3;
     node4; node5
   |};
-  [%expect {| ((node1 true) (node2 false) (node3) (node4) (node5)) |}]
+  [%expect {| ((node1 (bool true)) (node2 (bool false)) (node3) (node4) (node5)) |}]
 
 let%expect_test "a node with a children block" =
   test {|node key="val" { inner; inner2 true; }|};
-  [%expect {| (node (key (string val)) (children (inner) (inner2 true))) |}]
+  [%expect {| (node (prop key (string val)) (children (inner) (inner2 (bool true)))) |}]
 
 let%expect_test "a node inside the children block cannot end with }" =
   test {|- { inner }|};
@@ -93,13 +95,13 @@ let%expect_test "props/args after a children block" =
 
 let%expect_test "a type-annotated node" =
   test {|(author)node null|};
-  [%expect {| (node (type author) null) |}]
+  [%expect {| (node (type author) (null)) |}]
 
 let%expect_test "type-annotated values" =
   test {|node (u8)250 (date)"2021-02-03" filter=(regex)r"$\d+"|};
   [%expect {|
-    (node (<type> u8 number-int 250) (<type> date string 2021-02-03)
-     (filter (<type> regex string "$\\d+"))) |}]
+    (node (number-int 250 u8) (string 2021-02-03 date)
+     (prop filter (string "$\\d+" regex))) |}]
 
 let%expect_test "cannot use 'true' as a node name" =
   test {|truecorrect; true|};
@@ -128,19 +130,19 @@ let%expect_test "cannot use a keyword as a property name" =
 
 let%expect_test "string literals as a node name" =
   test {|"node \t [1]" null; "true" true|};
-  [%expect {| (("node \t [1]" null) (true true)) |}]
+  [%expect {| (("node \t [1]" (null)) (true (bool true))) |}]
 
 let%expect_test "raw string literals as a node name" =
   test {|r#"no\nde"#; r"false" false|};
-  [%expect {| (("no\\nde") (false false)) |}]
+  [%expect {| (("no\\nde") (false (bool false))) |}]
 
 let%expect_test "(raw) string literals as a type annotation" =
   test {|(r"no de")node ("true")true|};
-  [%expect {| (node (type "no de") (<type> true true)) |}]
+  [%expect {| (node (type "no de") (bool true true)) |}]
 
 let%expect_test "(raw) string literals as a property name" =
   test {|- "key\n"="value" r##"key\t"##=true|};
-  [%expect {| (- ("key\n" (string value)) ("key\\t" true)) |}]
+  [%expect {| (- (prop "key\n" (string value)) (prop "key\\t" (bool true))) |}]
 
 let%expect_test "identifiers cannot start with r#" =
   test {|- r#=0|};
@@ -157,7 +159,7 @@ let%expect_test "identifiers cannot contain special characters (<, etc.)" =
 
 let%expect_test "-- as an identifier" =
   test {|- --=0|};
-  [%expect {| (- (-- (number-int 0))) |}]
+  [%expect {| (- (prop -- (number-int 0))) |}]
 
 let%expect_test "single-line comments" =
   test {|node // comment // commment
@@ -170,7 +172,7 @@ let%expect_test "single-line comments can be empty" =
 
 let%expect_test "multiline comments" =
   test {|node /* * node " */ true /* { **/ { /**/ inner; }|};
-  [%expect {| (node true (children (inner))) |}]
+  [%expect {| (node (bool true) (children (inner))) |}]
 
 let%expect_test "multiline comments can be nested" =
   test {|node /* comment /* also a comment */ comment */ 0|};
@@ -180,7 +182,7 @@ let%expect_test "multiline comments can wrap lines" =
   test {|node true /*
     comment
     */ false|};
-  [%expect {| (node true false) |}]
+  [%expect {| (node (bool true) (bool false)) |}]
 
 let%expect_test "unterminated multiline comment" =
   test {|- /* comment "/*" */ |};
@@ -217,7 +219,9 @@ let%expect_test "/- can disable a children block before the args or props" =
       a
       b
     } key="value" { inner1; }|};
-  [%expect {| (mynode (string "not commented") (key (string value)) (children (inner1))) |}]
+  [%expect {|
+    (mynode (string "not commented") (prop key (string value))
+     (children (inner1))) |}]
 
 let%expect_test "/- cannot be empty" =
   test {|node /- /-"val" {}|};
@@ -230,7 +234,7 @@ let%expect_test "arguments without a separating whitespace" =
 
 let%expect_test "using tabs instead of 0x20 spaces" =
   test "\tnode\tkey1=true\tkey2=false";
-  [%expect {| (node (key1 true) (key2 false)) |}]
+  [%expect {| (node (prop key1 (bool true)) (prop key2 (bool false))) |}]
 
 let%expect_test "whitespace should not be allowed before =" =
   test {|- key  =  "value"|};
@@ -253,7 +257,9 @@ let%expect_test "whitespace should not be allowed after a value type annotation"
 
 let%expect_test "redefinition of a property" =
   test {|- a=0 prop=1 prop=2 prop=3 b=4 |};
-  [%expect {| (- (a (number-int 0)) (prop (number-int 3)) (b (number-int 4))) |}]
+  [%expect {|
+    (- (prop a (number-int 0)) (prop prop (number-int 3))
+     (prop b (number-int 4))) |}]
 
 let%test_module "numbers" = (module struct
   let%expect_test "an integer" =
@@ -424,7 +430,7 @@ let%test_module "line continuations" = (module struct
   let%expect_test "basic line continuation" =
     test {|node key1="v1" \
       key2="v2"|};
-    [%expect {| (node (key1 (string v1)) (key2 (string v2))) |}]
+    [%expect {| (node (prop key1 (string v1)) (prop key2 (string v2))) |}]
 
   let%expect_test "line continuation should allow empty lines" =
     test {|
@@ -433,13 +439,13 @@ let%test_module "line continuations" = (module struct
         \
         false \
     |};
-    [%expect {| (node true false) |}]
+    [%expect {| (node (bool true) (bool false)) |}]
 
   let%expect_test "single-line comments should be allowed after \\" =
     test {|node k1=1 \ // comment
                 k2=2
            node2|};
-    [%expect {| ((node (k1 (number-int 1)) (k2 (number-int 2))) (node2)) |}]
+    [%expect {| ((node (prop k1 (number-int 1)) (prop k2 (number-int 2))) (node2)) |}]
 
   let%expect_test "multiline comments should be allowed after \\" =
     test {|
@@ -447,7 +453,7 @@ let%test_module "line continuations" = (module struct
 
         comment */
         false |};
-    [%expect {| (node true false) |}]
+    [%expect {| (node (bool true) (bool false)) |}]
 
   let%expect_test "EOF is allowed after \\ followed by a comment" =
     test {|node \ // comment|};
@@ -476,7 +482,7 @@ let%test_module "unicode" = (module struct
     test {|ノード　お名前="☜(ﾟヮﾟ☜)"|};
     [%expect {|
       ("\227\131\142\227\131\188\227\131\137"
-       ("\227\129\138\229\144\141\229\137\141"
+       (prop "\227\129\138\229\144\141\229\137\141"
         (string "\226\152\156(\239\190\159\227\131\174\239\190\159\226\152\156)"))) |}]
 
   let%expect_test "LS U+2028 and PS U+2029 can be used as a node separator" =
@@ -501,12 +507,12 @@ let%expect_test "the type annotations example" =
     }
   |};
   [%expect {|
-    (numbers (<type> u8 number-int 10) (<type> i32 number-int 20)
-     (myfloat (<type> f32 number-decimal 1.5))
+    (numbers (number-int 10 u8) (number-int 20 i32)
+     (prop myfloat (number-decimal 1.5 f32))
      (children
-      (strings (<type> uuid string 123e4567-e89b-12d3-a456-426614174000)
-       (<type> date string 2021-02-03) (filter (<type> regex string "$\\d+")))
-      (person (type author) (name (string Alex))))) |}]
+      (strings (string 123e4567-e89b-12d3-a456-426614174000 uuid)
+       (string 2021-02-03 date) (prop filter (string "$\\d+" regex)))
+      (person (type author) (prop name (string Alex))))) |}]
 
 let%expect_test "the ci example" =
   test {|
@@ -564,12 +570,14 @@ let%expect_test "the ci example" =
        (fmt_and_docs (string "Check fmt & build docs")
         (children (runs-on (string ubuntu-latest))
          (steps
-          (children (step (uses (string actions/checkout@v1)))
-           (step (string "Install Rust") (uses (string actions-rs/toolchain@v1))
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
             (children (profile (string minimal)) (toolchain (string stable))
-             (components (string rustfmt)) (override true)))
-           (step (string rustfmt) (run (string "cargo fmt --all -- --check")))
-           (step (string docs) (run (string "cargo doc --no-deps")))))))
+             (components (string rustfmt)) (override (bool true))))
+           (step (string rustfmt)
+            (prop run (string "cargo fmt --all -- --check")))
+           (step (string docs) (prop run (string "cargo doc --no-deps")))))))
        (build_and_test (string "Build & Test")
         (children (runs-on (string "${{ matrix.os }}"))
          (strategy
@@ -579,12 +587,13 @@ let%expect_test "the ci example" =
              (os (string ubuntu-latest) (string macOS-latest)
               (string windows-latest))))))
          (steps
-          (children (step (uses (string actions/checkout@v1)))
-           (step (string "Install Rust") (uses (string actions-rs/toolchain@v1))
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
             (children (profile (string minimal))
              (toolchain (string "${{ matrix.rust }}"))
-             (components (string clippy)) (override true)))
+             (components (string clippy)) (override (bool true))))
            (step (string Clippy)
-            (run (string "cargo clippy --all -- -D warnings")))
+            (prop run (string "cargo clippy --all -- -D warnings")))
            (step (string "Run tests")
-            (run (string "cargo test --all --verbose")))))))))) |}]
+            (prop run (string "cargo test --all --verbose")))))))))) |}]

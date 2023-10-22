@@ -287,17 +287,20 @@ let sexp_of_value : [< value ] -> Sexp.t = function
       | `Int_raw _ -> "int-raw"
       | `Decimal _ -> "decimal" in
     Sexp.List [Atom (Printf.sprintf "number-%s" tag); Atom (Num.to_string num)]
-  | `Bool true -> Sexp.Atom "true"
-  | `Bool false -> Sexp.Atom "false"
-  | `Null -> Sexp.Atom "null"
+  | `Bool true -> Sexp.List [Atom "bool"; Atom "true"]
+  | `Bool false -> Sexp.List [Atom "bool"; Atom "false"]
+  | `Null -> Sexp.List [Atom "null"]
 
 let sexp_of_annot_value = function
   | None, v -> sexp_of_value v
   | Some annot, v -> match sexp_of_value v with
-    | Sexp.List xs -> Sexp.List (Atom "<type>" :: Atom annot :: xs)
-    | Sexp.Atom _ as atom -> Sexp.List [Atom "<type>"; Atom annot; atom]
+    | Sexp.List [x1; x2] -> Sexp.List [x1; x2; Atom annot]
+    | Sexp.List [x] -> Sexp.List [x; Atom annot]
+    | Sexp.List xs -> Sexp.List (xs @ [Atom annot])
+    | Sexp.Atom _ as atom -> Sexp.List [atom; Atom annot]
 
-let sexp_of_prop = Sexp_conv.(sexp_of_pair sexp_of_string sexp_of_annot_value)
+let sexp_of_prop (key, value) =
+  Sexp.List [Atom "prop"; Atom key; sexp_of_annot_value value]
 
 let rec sexp_of_node node =
   let children = List.rev @@ List.rev_map sexp_of_node node.children in
