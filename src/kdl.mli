@@ -287,11 +287,11 @@ module L : sig
   val compose : ('b, 'c) lens -> ('a, 'b) lens -> ('a, 'c) lens
   (** Lens composition. *)
 
-  val (|--) : ('a, 'b) lens -> ('b, 'c) lens -> ('a, 'c) lens
-  (** [l1 |-- l2] is an infix operator for [compose l2 l1]. *)
-
   val (//) : ('a, 'b) lens -> ('b, 'c) lens -> ('a, 'c) lens
-  (** Alias for [(|--)]. *)
+  (** [l1 // l2] is an infix operator for [compose l2 l1]. *)
+
+  val (|--) : ('a, 'b) lens -> ('b, 'c) lens -> ('a, 'c) lens
+  (** Alias for [(//)]. *)
 
   val get : 'a -> ('a, 'b) lens -> 'b option
   (** Run the getter ([lens.get]). Returns [Some value] if the lens
@@ -364,13 +364,13 @@ module L : sig
   (** Lens to the [n]-th node in a list, starting at 0. *)
 
   val child : ?annot:string -> string -> (node, node) lens
-  (** [child ?annot name] is [children |-- node ?annot name]. *)
+  (** [child ?annot name] is [children // node ?annot name]. *)
 
   val child_many : ?annot:string -> string -> (node, node list) lens
-  (** [child_many ?annot name] is [children |-- node_many ?annot name]. *)
+  (** [child_many ?annot name] is [children // node_many ?annot name]. *)
 
   val child_nth : int -> (node, node) lens
-  (** [child_nth n] is [children |-- node_nth n]. *)
+  (** [child_nth n] is [children // node_nth n]. *)
 
   val value : (annot_value, value) lens
   (** Lens to [value] in the [annot_value] pair. *)
@@ -412,34 +412,34 @@ module L : sig
   (** Lens to a null value. *)
 
   val string_value : (annot_value, string) lens
-  (** [string_value] is [value |-- string]. *)
+  (** [string_value] is [value // string]. *)
 
   val number_value : (annot_value, number) lens
-  (** [number_value] is [value |-- number]. *)
+  (** [number_value] is [value // number]. *)
 
   val string_number_value : (annot_value, string) lens
-  (** [string_number_value] is [value |-- string_number]. *)
+  (** [string_number_value] is [value // string_number]. *)
 
   val float_number_value : (annot_value, float) lens
-  (** [float_number_value] is [value |-- float_number]. *)
+  (** [float_number_value] is [value // float_number]. *)
 
   val int_number_value : (annot_value, int) lens
-  (** [int_number_value] is [value |-- int_number]. *)
+  (** [int_number_value] is [value // int_number]. *)
 
   val int32_number_value : (annot_value, int32) lens
-  (** [int32_number_value] is [value |-- int32_number]. *)
+  (** [int32_number_value] is [value // int32_number]. *)
 
   val int64_number_value : (annot_value, int64) lens
-  (** [int64_number_value] is [value |-- int64_number]. *)
+  (** [int64_number_value] is [value // int64_number]. *)
 
   val nativeint_number_value : (annot_value, nativeint) lens
-  (** [nativeint_number_value] is [value |-- nativeint_number]. *)
+  (** [nativeint_number_value] is [value // nativeint_number]. *)
 
   val bool_value : (annot_value, bool) lens
-  (** [bool_value] is [value |-- bool]. *)
+  (** [bool_value] is [value // bool]. *)
 
   val null_value : (annot_value, unit) lens
-  (** [null_value] is [value |-- null]. *)
+  (** [null_value] is [value // null]. *)
 
   val top : ('a list, 'a) lens
   (** Lens to the first element of a list. *)

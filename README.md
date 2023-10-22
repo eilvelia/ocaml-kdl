@@ -72,7 +72,7 @@ contents {
 ```
 
 Similar to [to.ml][], ocaml-kdl provides lenses. The lenses can be composed
-using `|--` or `//`:
+using `//` or `|--`:
 
 [to.ml]: https://github.com/ocaml-toml/To.ml
 

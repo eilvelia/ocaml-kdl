@@ -40,9 +40,9 @@ let compose l1 l2 = {
   set = (fun v a -> update (l1.set v) a l2)
 }
 
-let (|--) l1 l2 = compose l2 l1
+let (//) l1 l2 = compose l2 l1
 
-let (//) = (|--)
+let (|--) = (//)
 
 let (.@()) = get
 let (.@()<-) a l v = set a v l
@@ -129,7 +129,7 @@ let nth n = {
 
 (* these operations are O(n), and update is quite inefficient *)
 let arg n = {
-  (* Inlined [nth] instead of [args |-- nth n] *)
+  (* Inlined [nth] instead of [args // nth n] *)
   get = (fun node -> List.nth_opt node.args n);
   set = (fun arg' node -> match nth_and_replace n arg' node.args with
     | Some args -> Some { node with args }
@@ -173,9 +173,9 @@ let node_nth : int -> (node list, node) lens = nth
 
 (* TODO: get node by annot only? *)
 
-let child ?annot name = children |-- node ?annot name
-let child_many ?annot name = children |-- node_many ?annot name
-let child_nth n = children |-- node_nth n
+let child ?annot name = children // node ?annot name
+let child_many ?annot name = children // node_many ?annot name
+let child_nth n = children // node_nth n
 
 let value : (annot_value, value) lens = {
   get = (fun (_, v) -> Some v);
@@ -242,17 +242,17 @@ let null = {
   set = (fun _ _ -> Some `Null)
 }
 
-let string_value : (annot_value, string) lens = value |-- string
-let number_value : (annot_value, number) lens = value |-- number
-let string_number_value : (annot_value, string) lens = value |-- string_number
-let float_number_value : (annot_value, float) lens = value |-- float_number
-let int_number_value : (annot_value, int) lens = value |-- int_number
-let int32_number_value : (annot_value, int32) lens = value |-- int32_number
-let int64_number_value : (annot_value, int64) lens = value |-- int64_number
+let string_value : (annot_value, string) lens = value // string
+let number_value : (annot_value, number) lens = value // number
+let string_number_value : (annot_value, string) lens = value // string_number
+let float_number_value : (annot_value, float) lens = value // float_number
+let int_number_value : (annot_value, int) lens = value // int_number
+let int32_number_value : (annot_value, int32) lens = value // int32_number
+let int64_number_value : (annot_value, int64) lens = value // int64_number
 let nativeint_number_value : (annot_value, nativeint) lens =
-  value |-- nativeint_number
-let bool_value : (annot_value, bool) lens = value |-- bool
-let null_value : (annot_value, unit) lens = value |-- null
+  value // nativeint_number
+let bool_value : (annot_value, bool) lens = value // bool
+let null_value : (annot_value, unit) lens = value // null
 
 let filter f = {
   get = (fun list -> Some (List.filter f list));
