@@ -98,15 +98,6 @@ open struct
     let result = go 0 list in
     if !found then Some result else None
 
-  let find_and_replace f x' list =
-    let f (found, xs) x =
-      if not found && f x then
-        true, x' :: xs
-      else
-        found, x :: xs in
-    let found, list = List.fold_left f (false, []) list in
-    if found then Some (List.rev list) else None
-
   let filter_and_replace f replace_list list =
     let found = ref false in
     let f (replace, result) x =
@@ -120,6 +111,30 @@ open struct
     in
     let _, list = List.fold_left f (replace_list, []) list in
     if !found then Some (List.rev list) else None
+
+  let[@inline] matches_node ?annot name node =
+    String.equal node.name name && (match annot with
+      | Some a -> (match node.annot with
+        | Some a' -> String.equal a a'
+        | None -> false)
+      | None -> true)
+
+  let rec find_node n annot name = function
+    | [] -> None
+    | x :: xs when matches_node ?annot name x ->
+      if n <= 0 then Some x else find_node (n - 1) annot name xs
+    | _ :: xs -> find_node n annot name xs
+
+  let find_and_replace_node nth annot name x' list =
+    let found = ref false in
+    let[@tailrec_mod_cons] rec go n = function
+      | [] -> []
+      | x :: xs when matches_node ?annot name x ->
+        if n <= 0 then (found := true; x' :: xs) else x :: go (n - 1) xs
+      | x :: xs -> x :: go n xs
+    in
+    let result = go nth list in
+    if !found then Some result else None
 end
 
 let nth n = {
@@ -146,23 +161,14 @@ let prop key = {
   )
 }
 
-let matches_name ?annot name node =
-  node.name = name && (match annot with
-    | Some a -> (match node.annot with
-      | Some a' -> a = a'
-      | None -> false)
-    | None -> true)
-
-(* TODO: add a ?nth argument? *)
-let node ?annot (name : string) =
-  let matches = matches_name ?annot name in
+let node ?(nth = 0) ?annot (name : string) =
   {
-    get = (fun nodes -> List.find_opt matches nodes);
-    set = (fun node' nodes -> find_and_replace matches node' nodes)
+    get = (fun nodes -> find_node nth annot name nodes);
+    set = (fun node' nodes -> find_and_replace_node nth annot name node' nodes)
   }
 
 let node_many ?annot (name : string) =
-  let matches = matches_name ?annot name in
+  let matches = matches_node ?annot name in
   {
     get = (fun nodes ->
       match List.filter matches nodes with [] -> None | xs -> Some xs);
@@ -173,7 +179,7 @@ let node_nth : int -> (node list, node) lens = nth
 
 (* TODO: get node by annot only? *)
 
-let child ?annot name = children // node ?annot name
+let child ?nth ?annot name = children // node ?nth ?annot name
 let child_many ?annot name = children // node_many ?annot name
 let child_nth n = children // node_nth n
 

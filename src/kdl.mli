@@ -350,21 +350,22 @@ module L : sig
       Operates in O(n) time. *)
 
   val prop : string -> (node, annot_value) lens
-  (** Lens to the property with the specific name. Operates in O(n) time. *)
+  (** Lens to the property with the given name. Operates in O(n) time. *)
 
-  val node : ?annot:string -> string -> (node list, node) lens
-  (** [node ?annot name] is a lens to the first node with the specific name in
-      a list. The search optionally can be narrowed by passing [?annot]. *)
+  val node : ?nth:int -> ?annot:string -> string -> (node list, node) lens
+  (** [node ?nth ?annot name] is a lens to the [n]-th node with the given
+      name in a list. [n] is specified by the [?nth] optional argument and
+      defaults to the first node, i.e. 0. The search can optionally be
+      narrowed by passing [?annot]. *)
 
   val node_many : ?annot:string -> string -> (node list, node list) lens
-  (** Same as {!val:node}, but returns all possible matches instead of the
-      first one. *)
+  (** Same as {!val:node}, but returns all possible matches. *)
 
   val node_nth : int -> (node list, node) lens
   (** Lens to the [n]-th node in a list, starting at 0. *)
 
-  val child : ?annot:string -> string -> (node, node) lens
-  (** [child ?annot name] is [children // node ?annot name]. *)
+  val child : ?nth:int -> ?annot:string -> string -> (node, node) lens
+  (** [child ?nth ?annot name] is [children // node ?nth ?annot name]. *)
 
   val child_many : ?annot:string -> string -> (node, node list) lens
   (** [child_many ?annot name] is [children // node_many ?annot name]. *)
