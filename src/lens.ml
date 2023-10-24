@@ -127,7 +127,7 @@ open struct
 
   let find_and_replace_node nth annot name x' list =
     let found = ref false in
-    let[@tailrec_mod_cons] rec go n = function
+    let[@tail_mod_cons] rec go n = function
       | [] -> []
       | x :: xs when matches_node ?annot name x ->
         if n <= 0 then (found := true; x' :: xs) else x :: go (n - 1) xs
