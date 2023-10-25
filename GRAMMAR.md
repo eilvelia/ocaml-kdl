@@ -17,19 +17,21 @@ name ::= ident | string | raw-string
 ## Tokens
 
 ```bnf
+spacechar ::= <see the KDL whitespace table>
 newline ::= CRLF | CR | LF | NEL | FF | LS | PS
 
 single-line-comment ::= "//" [^ newline]* (newline | EOF)
 multi-line-comment ::= "/*" ([^ "*/"]* | multi-line-comment) "*/"
 
-line-cont ::= "\\" single-line-comment
-            | "\\" newline
+line-cont ::= '\' single-line-comment
+            | '\' newline
 
-identchar ::= [^ "\\" "/" "(" ")" "{" "}" "<" ">" ";" "[" "]" "=" "," '"' 0x0..0x20 ]
+identchar ::= [^ '\' "/" "(" ")" "{" "}" "<" ">" ";" "[" "]" "=" "," '"' 0x0..0x20 newline spacechar]
 identstart ::= identchar - "0".."9"
-ident ::= "-" identstart identchar*
-        | "-"
-        | (identstart - "-") identchar*
+ident ::= ( sign identstart identchar* | sign
+          | "r" (identchar - "#") identchar* | "r"
+          | (identstart - ["r" sign]) identchar*
+          ) - ["true" "false" "null"]
 
 hex-digit ::= "0".."9" | "a".."f" | "A".."F"
 dec-digit ::= "0".."9"
@@ -46,24 +48,21 @@ bin-int ::= sign? "0b" bin-digit (bin-digit | "_")*
 integer ::= dec-int | hex-int | oct-int | bin-int
 float ::= dec-float
 
-raw-string ::= "r" <any number of #> '"' <any-char>* '"' <the same number of #>
+raw-string ::= "r" <any number of #> '"' <any char>* '"' <the same number of #>
 string ::= '"' string-character* '"'
-string-character ::= <any-regular-char>
-                   | "\n" | "\r" | "\t" | "\\" | '\"' | "\b" | "\f"
-                   | "\u{" hex-digit{1,6} "}"
+escape ::= "n" | "r" | "t" | '\' | '"' | "b" | "f" | "u{" hex-digit{1,6} "}"
+         | (spacechar | newline)+
+string-character ::= '\' escape | [^ '"']
 ```
 
-`ws` (whitespace) is used as a token delimiter, defined as the union of the unicode
-characters described [here][], `single-line-comment`, `multi-line-comment`,
-and `line-cont`.
+Whitespace (defined as the union of `spacechar`, `single-line-comment`,
+`multi-line-comment`, and `line-cont`) is skipped.
 
-[here]: https://github.com/kdl-org/kdl/blob/1.0.0/SPEC.md#whitespace
+Note that `EOF` is not allowed after the `\` line continuation without a
+single-line comment.
 
-A keyword (`true`, `false`, `null`) cannot be an `ident`.
-
-Note that `EOF` is not allowed after the `\` line continuation without a single-line comment.
-
-Whitespace around `=` and after the `)` type annotation is forbiddened by a semantic check.
+Whitespace around `=` and after the `)` type annotation is forbiddened by
+semantic checks.
 
 ---
 
@@ -75,5 +74,4 @@ whitespace-insensitive. For example, the KDL spec forbids `node"str1""str2"`,
 while `ocaml-kdl` allows it. Everything valid by the KDL spec should also be
 valid in `ocaml-kdl`, but the opposite is not always true.
 
-The original grammar is made mostly for recursive descent parsers without a
-separate lexical analyzer.
+The original grammar seems to be made mostly for top-down parsers.

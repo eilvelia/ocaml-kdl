@@ -4,7 +4,7 @@ open Printf
 let error msg = raise @@ Err.CustomLexingError msg
 
 (* Note: [Compl] doesn't seem to work *)
-let space_chars = [%sedlex.regexp?
+let space_char = [%sedlex.regexp?
     '\t'   (* Character Tabulation U+0009 *)
   | 0x000B (* Line Tabulation U+000B *)
   | ' '    (* Space U+0020 *)
@@ -27,9 +27,9 @@ let space_chars = [%sedlex.regexp?
   | 0xFEFF (* BOM U+FEFF *)
 ]
 
-let ws = [%sedlex.regexp? Plus space_chars]
+let ws = [%sedlex.regexp? Plus space_char]
 
-let newline_chars = [%sedlex.regexp?
+let newline_char = [%sedlex.regexp?
     '\r'   (* CR   Carriage Return U+000D *)
   | '\n'   (* LF   Line Feed U+000A *)
   | 0x0085 (* NEL  Next Line U+0085 *)
@@ -38,7 +38,7 @@ let newline_chars = [%sedlex.regexp?
   | 0x2029 (* PS   Paragraph Separator U+2029 *)
 ]
 
-let newline = [%sedlex.regexp? "\r\n" | newline_chars]
+let newline = [%sedlex.regexp? "\r\n" | newline_char]
 
 (* With this defined as [%sedlex.regexp? ascii_hex_digit], the
    [(integer | float) identchar+] case surprisingly doesn't work correctly *)
@@ -60,15 +60,15 @@ let binary = [%sedlex.regexp? Opt sign, "0b", Chars "01", Star (Chars "01_")]
 let integer = [%sedlex.regexp? decimal_int | hex | octal | binary]
 let float = [%sedlex.regexp? decimal_float]
 
-(* Disallowed:
+(* Disallowed identifier characters as per the spec: {|
    Any codepoint with hexadecimal value 0x20 or below
    Any codepoint with hexadecimal value higher than 0x10FFFF
-   Any of {| \/(){}<>;[]=," |} *)
-let disallowed_chars = [%sedlex.regexp? Chars "\\/(){}<>;[]=,\""
-                                      | 0 .. 0x20
-                                      | space_chars
-                                      | newline_chars]
-let identchar = [%sedlex.regexp? Sub (any, disallowed_chars)]
+   Any of \/(){}<>;[]=,"    |} *)
+let nonident_char = [%sedlex.regexp? Chars "\\/(){}<>;[]=,\""
+                                     | 0 .. 0x20
+                                     | space_char
+                                     | newline_char]
+let identchar = [%sedlex.regexp? Sub (any, nonident_char)]
 let startident = [%sedlex.regexp? Sub (identchar, '0'..'9')]
 
 let[@inline] new_line lexbuf =
@@ -118,6 +118,7 @@ let rec raw_string hashlen lexbuf =
     Buffer.add_string string_buffer (Sedlexing.Utf8.lexeme lexbuf);
     raw_string hashlen lexbuf
   | '"', Star '#' ->
+    (* TODO: Do not consume more hashes than needed? *)
     let hashes =
       Sedlexing.Utf8.sub_lexeme lexbuf 1 (Sedlexing.lexeme_length lexbuf - 1) in
     let hashlen' = String.length hashes in
@@ -213,9 +214,8 @@ let rec main lexbuf =
     set_string_start lexbuf;
     string lexbuf
   | "r#", Star identchar -> error "An identifier cannot start with r#"
-  | '-', startident, Star identchar -> IDENT (Sedlexing.Utf8.lexeme lexbuf)
-  | '-' -> IDENT "-"
-  | Sub (startident, '-'), Star identchar -> IDENT (Sedlexing.Utf8.lexeme lexbuf)
+  | sign, Opt (startident, Star identchar)
+  | Sub (startident, sign), Star identchar -> IDENT (Sedlexing.Utf8.lexeme lexbuf)
   | eof -> EOF
   | any -> error @@ sprintf "Illegal character '%s'" (Sedlexing.Utf8.lexeme lexbuf)
   | _ -> assert false
@@ -253,10 +253,8 @@ let rec query lexbuf =
   | "^=" -> CARET_EQ
   | "$=" -> DOLLAR_EQ
   | "*=" -> STAR_EQ
-  | '-', query_startident, Star query_identchar ->
-    IDENT (Sedlexing.Utf8.lexeme lexbuf)
-  | '-' -> IDENT "-"
-  | Sub (query_startident, '-'), Star query_identchar ->
+  | sign, Opt (query_startident, Star query_identchar)
+  | Sub (query_startident, sign), Star query_identchar ->
     IDENT (Sedlexing.Utf8.lexeme lexbuf)
   | any ->
     error @@ sprintf "Illegal character '%s'" (Sedlexing.Utf8.lexeme lexbuf)
