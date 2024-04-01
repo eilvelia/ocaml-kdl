@@ -5,35 +5,42 @@ let pp_print_bytes fmt bytes =
   Format.pp_print_string fmt (Bytes.unsafe_to_string bytes)
 
 let is_keyword = function
-  | "true" | "false" | "null" -> true
+  | "true" | "false" | "null" | "inf" | "-inf" | "nan" -> true
   | _ -> false
 
 let digits = "0123456789"
 
+(* Consider using the multi-line string syntax in case \n is found? *)
+
 let[@inline] escape str result =
   let n = ref 0 in
   String.iter (function
+    (* TODO: Other disallowed characters *)
     | '\\' | '"' as ch ->
       Bytes.set result !n '\\'; Bytes.set result (!n + 1) ch; n := !n + 2
+    | '\n' ->
+      Bytes.set result !n '\\'; Bytes.set result (!n + 1) 'n'; n := !n + 2
     | ch -> Bytes.set result !n ch; incr n
   ) str
 
 let pp_ident fmt str =
   let escape_len = ref 0 in
-  let contains_invalid_identchar = ref false in
+  let contains_nonident_char = ref false in
   String.iter (function
-    | '\\' | '"' -> incr escape_len; contains_invalid_identchar := true
-    | '/' | '(' | ')' | '{' | '}' | '<' | '>' | ';' | '[' | ']' | '=' | ','
-    (* TODO: This should also include other unicode spaces/newlines *)
-    | '\000'..'\x20' ->
-      contains_invalid_identchar := true
+    | '\\' | '"' | '\n' -> incr escape_len; contains_nonident_char := true
+    | '(' | ')' | '{' | '}' | '[' | ']' | '/' | '#' | ';'
+    | '='
+    (* TODO: This should also include other unicode spaces and newlines *)
+    | ' '
+    | '\x00'..'\x19' | '\x7f' ->
+      contains_nonident_char := true
     | _ -> ()
   ) str;
   let dash_digit =
     String.length str >= 2 && str.[0] = '-' && String.contains digits str.[1] in
   let empty = String.length str <= 0 in
   let digit_start = not empty && String.contains digits str.[0] in
-  let quoted = !contains_invalid_identchar || is_keyword str || empty
+  let quoted = !contains_nonident_char || is_keyword str || empty
                || dash_digit || digit_start in
   if quoted then Format.pp_print_char fmt '"';
   let result = Bytes.create (String.length str + !escape_len) in
@@ -44,7 +51,7 @@ let pp_ident fmt str =
 let[@inline] count_escape str =
   (* Note: String.fold_left is not available in OCaml < 4.13 *)
   let result = ref 0 in
-  String.iter (function '\\' | '"' -> incr result | _ -> ()) str;
+  String.iter (function '\\' | '"' | '\n' -> incr result | _ -> ()) str;
   !result
 
 let pp_string_value fmt str =
@@ -56,9 +63,14 @@ let pp_string_value fmt str =
 
 let pp_value fmt : [< value] -> _ = function
   | `String s -> pp_string_value fmt s
-  | #number as num -> Format.pp_print_string fmt (Num.to_string num)
-  | `Bool b -> Format.pp_print_bool fmt b
-  | `Null -> Format.pp_print_string fmt "null"
+  | #number as num -> Format.pp_print_string fmt (match Num.to_string num with
+    | "inf" -> "#inf"
+    | "-inf" -> "#inf"
+    | "nan" -> "#nan"
+    | str -> str)
+  | `Bool true -> Format.pp_print_string fmt "#true"
+  | `Bool false -> Format.pp_print_string fmt "#false"
+  | `Null -> Format.pp_print_string fmt "#null"
 
 let pp_annot_value fmt = function
   | Some annot, v -> Format.fprintf fmt "(%a)%a" pp_ident annot pp_value v
@@ -74,7 +86,7 @@ let pp_entity_list f fmt = function
   | [] -> ()
   | xs ->
     space fmt ();
-    (* TODO: We can probably use pp_print_custom_break to inject \ as line
+    (* TODO: We can perhaps use pp_print_custom_break to inject \ as line
        separators on breaks *)
     Format.pp_print_list ~pp_sep:space f fmt xs
 

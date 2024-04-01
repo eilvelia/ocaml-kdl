@@ -20,55 +20,96 @@ let%expect_test "a node with one argument" =
   [%expect {| (node (number-int 0)) |}]
 
 let%expect_test "all literals as arguments" =
-  test {|node 1 true false "str" 2 r"raw string" null|};
+  test {|node 1 #true #false "str" 2 #"raw string"# #null|};
   [%expect {|
     (node (number-int 1) (bool true) (bool false) (string str) (number-int 2)
      (string "raw string") (null)) |}]
 
 let%expect_test "a node with properties" =
-  test {|node key=true foo="bar"|};
+  test {|node key=#true foo="bar"|};
   [%expect {| (node (prop key (bool true)) (prop foo (string bar))) |}]
 
 let%expect_test "a node with mixed properties and arguments" =
-  test {|node true key=true false foo="bar" null|};
+  test {|node #true key=#true #false foo="bar" #null|};
   [%expect {|
     (node (bool true) (bool false) (null) (prop key (bool true))
      (prop foo (string bar))) |}]
 
 let%expect_test "- is a valid node name" =
-  test {|- true|};
-  [%expect {| (- (bool true)) |}]
+  test {|- 0|};
+  [%expect {| (- (number-int 0)) |}]
 
 let%expect_test "special symbols are allowed in an identifier" =
-  test {|foo123~!@#$%^&*.:'|?+ "weeee"|};
-  [%expect {| (foo123~!@#$%^&*.:'|?+ (string weeee)) |}]
+  test {|foo123~!@$%<>^&*.:'|?+ "weeee"|};
+  [%expect {| (foo123~!@$%<>^&*.:'|?+ (string weeee)) |}]
+
+let%expect_test "true/false/null are not allowed as identifiers" =
+  test {|- truea=1 - true=0|};
+  test {|- false=0|};
+  test {|- null=0|};
+  test {|null 0|};
+  test {|- foo=true bar=false|};
+  [%expect {|
+    Error: :1:13-1:17: A keyword must be quoted. Did you mean "true" or #true?
+    Error: :1:3-1:8: A keyword must be quoted. Did you mean "false" or #false?
+    Error: :1:3-1:7: A keyword must be quoted. Did you mean "null" or #null?
+    Error: :1:1-1:5: A keyword must be quoted. Did you mean "null" or #null?
+    Error: :1:7-1:11: A keyword must be quoted. Did you mean "true" or #true? |}]
+
+let%expect_test "numeric non-# keywords are not allowed as identifiers" =
+  test {|inf 0|};
+  test {|nan 0|};
+  test {|-inf 0|};
+  test {|0 a=nan|};
+  test {|nana 0|};
+  [%expect {|
+    Error: :1:1-1:4: A keyword must be quoted. Did you mean "inf" or #inf?
+    Error: :1:1-1:4: A keyword must be quoted. Did you mean "nan" or #nan?
+    Error: :1:1-1:5: A keyword must be quoted. Did you mean "-inf" or #-inf?
+    Error: :1:1-1:2: A number is not a valid node name
+    (nana (number-int 0)) |}]
+
+let%expect_test "identifiers cannot start with 'number-like' symbols" =
+  test {|.1 0|};
+  test {|.1foo 0|};
+  test {|-.5 0|};
+  test {|+.5 0|};
+  test {|-.5bar 0|};
+  test {|-1em 0|};
+  [%expect {|
+    Error: :1:1-1:3: Number-like identifiers are invalid and must be quoted
+    Error: :1:1-1:6: Number-like identifiers are invalid and must be quoted
+    Error: :1:1-1:4: Number-like identifiers are invalid and must be quoted
+    Error: :1:1-1:4: Number-like identifiers are invalid and must be quoted
+    Error: :1:1-1:7: Number-like identifiers are invalid and must be quoted
+    Error: :1:1-1:5: Invalid number literal -1em |}]
 
 let%expect_test "a node terminated with a semicolon" =
   test {|node 2;|};
   [%expect {| (node (number-int 2)) |}]
 
 let%expect_test "several nodes separated by semicolon" =
-  test {| node1 true arg1=1; node2 false arg2=2; node3; node4 |};
+  test {| node1 #true arg1=1; node2 #false arg2=2; node3; node4 |};
   [%expect {|
     ((node1 (bool true) (prop arg1 (number-int 1)))
      (node2 (bool false) (prop arg2 (number-int 2))) (node3) (node4)) |}]
 
 let%expect_test "several nodes separated by semicolon and newline" =
   test {|
-    node1 true
-    node2 false
+    node1 #true
+    node2 #false
     node3;
     node4; node5
   |};
   [%expect {| ((node1 (bool true)) (node2 (bool false)) (node3) (node4) (node5)) |}]
 
 let%expect_test "a node with a children block" =
-  test {|node key="val" { inner; inner2 true; }|};
+  test {|node key="val" { inner; inner2 #true; }|};
   [%expect {| (node (prop key (string val)) (children (inner) (inner2 (bool true)))) |}]
 
-let%expect_test "a node inside the children block cannot end with }" =
-  test {|- { inner }|};
-  [%expect {| Error: :1:11-1:12: A node should be terminated with a semicolon or newline |}]
+let%expect_test "a child node may be terminated with }" =
+  test {|parent { child1; child2 }|};
+  [%expect {| (parent (children (child1) (child2))) |}]
 
 let%expect_test "nodes delimited by newline inside a children block" =
   test {|
@@ -94,68 +135,85 @@ let%expect_test "props/args after a children block" =
   [%expect {| Error: :1:5-1:14: A children block must be the last element of a node |}]
 
 let%expect_test "a type-annotated node" =
-  test {|(author)node null|};
+  test {|(author)node #null|};
   [%expect {| (node (type author) (null)) |}]
 
 let%expect_test "type-annotated values" =
-  test {|node (u8)250 (date)"2021-02-03" filter=(regex)r"$\d+"|};
+  test {|node (u8)250 (date)"2021-02-03" filter=(regex)#"$\d+"#|};
   [%expect {|
     (node (number-int 250 u8) (string 2021-02-03 date)
      (prop filter (string "$\\d+" regex))) |}]
 
-let%expect_test "cannot use 'true' as a node name" =
+let%expect_test "cannot use bools/null as node names" =
   test {|truecorrect; true|};
-  [%expect {| Error: :1:14-1:18: 'true' is not a valid node name |}]
-
-let%expect_test "cannot use 'false' as a node name" =
+  test {|truecorrect; #true|};
   test {|falsecorrect; false|};
-  [%expect {| Error: :1:15-1:20: 'false' is not a valid node name |}]
-
-let%expect_test "cannot use 'null' as a node name" =
-  test {|null key="value"|};
-  [%expect {| Error: :1:1-1:5: 'null' is not a valid node name |}]
+  test {|falsecorrect; #false|};
+  test {|#null 0|};
+  [%expect {|
+    Error: :1:14-1:18: A keyword must be quoted. Did you mean "true" or #true?
+    Error: :1:14-1:19: A keyword is not a valid node name
+    Error: :1:15-1:20: A keyword must be quoted. Did you mean "false" or #false?
+    Error: :1:15-1:21: A keyword is not a valid node name
+    Error: :1:1-1:6: A keyword is not a valid node name |}]
 
 let%expect_test "cannot use a number as a node name" =
   test {|-3|};
   [%expect {| Error: :1:1-1:3: A number is not a valid node name |}]
 
 let%expect_test "cannot use a keyword as a type annotation" =
+  test {|(#true)node|};
+  test {|(#null)node|};
+  test {|(#inf)node|};
   test {|(true)node|};
-  [%expect {| Error: :1:2-1:6: 'true' is not a valid type annotation name |}]
+  [%expect {|
+    Error: :1:2-1:7: A keyword is not a valid type annotation name
+    Error: :1:2-1:7: A keyword is not a valid type annotation name
+    Error: :1:2-1:6: A number is not a valid type annotation name
+    Error: :1:2-1:6: A keyword must be quoted. Did you mean "true" or #true? |}]
 
-let%expect_test "cannot use a keyword as a property name" =
-  (* TODO: A better error perhaps? (true is parsed as a value, so = is invalid.) *)
-  test {|- true=false|};
-  [%expect {| Error: :1:7-1:8: Expected a value |}]
+let%expect_test "cannot use non-strings & non-idents as a property name" =
+  (* TODO: A better error perhaps? (#true is parsed as a value, so = is invalid.) *)
+  test {|- #true=#false|};
+  test {|- #null=foo|};
+  test {|- #inf=0|};
+  test {|- 123=0|};
+  [%expect {|
+    Error: :1:8-1:9: Expected a value
+    Error: :1:8-1:9: Expected a value
+    Error: :1:7-1:8: Expected a value
+    Error: :1:6-1:7: Expected a value |}]
 
 let%expect_test "string literals as a node name" =
-  test {|"node \t [1]" null; "true" true|};
-  [%expect {| (("node \t [1]" (null)) (true (bool true))) |}]
+  test {|"node \t [1]" #null; "true" #true "#true"|};
+  [%expect {| (("node \t [1]" (null)) (true (bool true) (string #true))) |}]
 
 let%expect_test "raw string literals as a node name" =
-  test {|r#"no\nde"#; r"false" false|};
+  test {|#"no\nde"#; #"false"# #false|};
   [%expect {| (("no\\nde") (false (bool false))) |}]
 
 let%expect_test "(raw) string literals as a type annotation" =
-  test {|(r"no de")node ("true")true|};
+  test {|(#"no de"#)node ("true")#true|};
   [%expect {| (node (type "no de") (bool true true)) |}]
 
 let%expect_test "(raw) string literals as a property name" =
-  test {|- "key\n"="value" r##"key\t"##=true|};
+  test {|- "key\n"="value" ##"key\t"##=#true|};
   [%expect {| (- (prop "key\n" (string value)) (prop "key\\t" (bool true))) |}]
 
-let%expect_test "identifiers cannot start with r#" =
-  test {|- r#=0|};
-  test {|- r#a=1|};
-  test {|- r#<=1|};
+let%expect_test "# in identifiers" =
+  test {|- #hello=0|};
+  test {|- nixpkgs#hello=1|};
+  test {|- r#a=2|};
+  test {|- #true=3|};
   [%expect {|
-    Error: :1:3-1:5: An identifier cannot start with r#
-    Error: :1:3-1:6: An identifier cannot start with r#
-    Error: :1:3-1:5: An identifier cannot start with r# |}]
+    Error: :1:3-1:9: Unknown keyword #hello
+    Error: :1:10-1:16: Unknown keyword #hello
+    Error: :1:4-1:6: Unknown keyword #a
+    Error: :1:8-1:9: Expected a value |}]
 
-let%expect_test "identifiers cannot contain special characters (<, etc.)" =
-  test {|- a<=1|};
-  [%expect {| Error: :1:4-1:5: Illegal character '<' |}]
+let%expect_test "identifiers cannot contain special characters ([, etc.)" =
+  test {|- a[=]1|};
+  [%expect {| Error: :1:4-1:5: Illegal character '[' |}]
 
 let%expect_test "-- as an identifier" =
   test {|- --=0|};
@@ -171,7 +229,7 @@ let%expect_test "single-line comments can be empty" =
   [%expect {| (node) |}]
 
 let%expect_test "multiline comments" =
-  test {|node /* * node " */ true /* { **/ { /**/ inner; }|};
+  test {|node /* * node " */ #true /* { **/ { /**/ inner; }|};
   [%expect {| (node (bool true) (children (inner))) |}]
 
 let%expect_test "multiline comments can be nested" =
@@ -179,10 +237,10 @@ let%expect_test "multiline comments can be nested" =
   [%expect {| (node (number-int 0)) |}]
 
 let%expect_test "multiline comments can wrap lines" =
-  test {|node true /*
+  test {|node 0 /*
     comment
-    */ false|};
-  [%expect {| (node (bool true) (bool false)) |}]
+    */ 1|};
+  [%expect {| (node (number-int 0) (number-int 1)) |}]
 
 let%expect_test "unterminated multiline comment" =
   test {|- /* comment "/*" */ |};
@@ -213,7 +271,6 @@ let%expect_test "/- can disable a children block" =
   [%expect {| (mynode (string "not commented")) |}]
 
 let%expect_test "/- can disable a children block before the args or props" =
-  (* Note: this is non-standard for now *)
   test {|
     mynode /-"commented" "not commented" /-{
       a
@@ -233,27 +290,27 @@ let%expect_test "arguments without a separating whitespace" =
   [%expect {| (node (string str1) (string str2)) |}]
 
 let%expect_test "using tabs instead of 0x20 spaces" =
-  test "\tnode\tkey1=true\tkey2=false";
+  test "\tnode\tkey1=#true\tkey2=#false";
   [%expect {| (node (prop key1 (bool true)) (prop key2 (bool false))) |}]
 
-let%expect_test "whitespace should not be allowed before =" =
+let%expect_test "whitespace around =" =
   test {|- key  =  "value"|};
-  [%expect {| Error: :1:6-1:8: Whitespace before '=' is not allowed |}]
+  [%expect {| (- (prop key (string value))) |}]
 
-let%expect_test "whitespace should not be allowed after =" =
+let%expect_test "whitespace after =" =
   test {|- key= "value"|};
   test {|- key= (string)"value"|};
   [%expect {|
-    Error: :1:7-1:8: Whitespace after '=' is not allowed
-    Error: :1:7-1:8: Whitespace after '=' is not allowed |}]
+    (- (prop key (string value)))
+    (- (prop key (string value string))) |}]
 
-let%expect_test "whitespace should not be allowed after a node type annotation" =
-  test {|(author) node true|};
-  [%expect {| Error: :1:9-1:10: Whitespace after a type annotation is not allowed |}]
+let%expect_test "whitespace after a node type annotation" =
+  test {|(author) node 0|};
+  [%expect {| (node (type author) (number-int 0)) |}]
 
-let%expect_test "whitespace should not be allowed after a value type annotation" =
+let%expect_test "whitespace after a value type annotation" =
   test {|node prop=(year) "2022"          (u8) 58|};
-  [%expect {| Error: :1:17-1:18: Whitespace after a type annotation is not allowed |}]
+  [%expect {| (node (number-int 58 u8) (prop prop (string 2022 year))) |}]
 
 let%expect_test "redefinition of a property" =
   test {|- a=0 prop=1 prop=2 prop=3 b=4 |};
@@ -269,6 +326,10 @@ let%test_module "numbers" = (module struct
   let%expect_test "a negative integer" =
     test {|node -30; - -3|};
     [%expect {| ((node (number-int -30)) (- (number-int -3))) |}]
+
+  let%expect_test "an explicitly positive integer" =
+    test {|node +30; + +3|};
+    [%expect {| ((node (number-int 30)) (+ (number-int 3))) |}]
 
   let%expect_test "a large integer" =
     test {|node 12351823951203598125123512041234935|};
@@ -328,6 +389,16 @@ let%test_module "numbers" = (module struct
   let%expect_test "a hex number cannot be followed by G-Z letters" =
     test {|- 0xfeag|};
     [%expect {| Error: :1:3-1:9: Invalid number literal 0xfeag |}]
+
+  let%expect_test "special #inf and #-inf numbers" =
+    test {|- a=#inf b=#-inf c=3 #inf|};
+    [%expect {|
+      (- (number-decimal inf) (prop a (number-decimal inf))
+       (prop b (number-decimal -inf)) (prop c (number-int 3))) |}]
+
+  let%expect_test "special #nan number" =
+    test {|- #nan a=#nan|};
+    [%expect {| (- (number-decimal nan) (prop a (number-decimal nan))) |}]
 end)
 
 let%test_module "strings" = (module struct
@@ -335,47 +406,127 @@ let%test_module "strings" = (module struct
     test {|- "hello world" "hi"|};
     [%expect {| (- (string "hello world") (string hi)) |}]
 
-  let%expect_test "strings can be multiline" =
+  let%expect_test "raw strings" =
+    test {|- #"this is a raw string"#|};
+    [%expect {| (- (string "this is a raw string")) |}]
+
+  let%expect_test "raw strings can be enclosed by arbitrary number of #" =
+    test {|- ####"raw " string"####   ##"raw "# string"##|};
+    [%expect {| (- (string "raw \" string") (string "raw \"# string")) |}]
+
+  let%expect_test "raw strings with \" followed by a greater number of #" =
+    test {|- #"hello "## world"#   "hello "# world"|};
+    [%expect {| Error: :1:10-1:14: Expected 1 hash symbol(s), got 2 |}]
+
+  let%expect_test "closing the raw string with a greater number of #" =
+    test {|- #"raw string"##|};
+    [%expect {| Error: :1:15-1:18: Expected 1 hash symbol(s), got 2 |}]
+
+  let%expect_test "unterminated raw string" =
+    test {|- ##"raw string"#|};
+    [%expect {| Error: :1:18-1:18: Unterminated raw string |}]
+
+  let%expect_test "multi-line strings" =
+    test {|multi-line "
+                      foo
+                  This is the\tbase indentation
+                          bar
+                  "|};
+    [%expect {|
+      (multi-line
+       (string  "    foo\
+               \nThis is the\tbase indentation\
+               \n        bar")) |}]
+
+  let%expect_test "raw multi-line strings" =
+    test {|multi-line #"
+                      foo
+                  This is the\tbase indentation
+                          bar
+                  "#|};
+    [%expect {|
+      (multi-line
+       (string  "    foo\
+               \nThis is the\\tbase indentation\
+               \n        bar")) |}]
+
+  let%expect_test "empty multi-line string" =
+    test {|multi "
+        " #"
+        "#|};
+    [%expect {| (multi (string "") (string "")) |}]
+
+  let%expect_test "multi-line string with a single line" =
+    test {|multi "
+        hello world
+        "|};
+    [%expect {| (multi (string "hello world")) |}]
+
+  let%expect_test "multi-line string with zero identation" =
+    test "multi \"\nfoo\nbar\n\"";
+    [%expect {|
+      (multi (string  "foo\
+                     \nbar")) |}]
+
+  let%expect_test "multi-line string with last empty indented line" =
+    test "multi \"\n  foo\n  bar\n  \n  \"";
+    [%expect {|
+      (multi (string  "foo\
+                     \nbar\
+                     \n")) |}]
+
+  let%expect_test "multi-line string with empty line in-between" =
+    test "multi \"\n  foo\n\n  bar\n  \"";
+    [%expect {|
+      (multi (string  "foo\
+                     \n\
+                     \nbar")) |}]
+
+  let%expect_test "completely empty multi-line string" =
+    test "multi \"\n\"";
+    [%expect {|
+      (multi (string "")) |}]
+
+  let%expect_test "multi-line string with a ws line in-between (error)" =
+    test "multi \"\n  foo\n \n  bar\n  \"";
+    [%expect {|
+      Error: :5:1-5:4: Whitespace prefix does not match |}]
+
+  let%expect_test "multi-line string with larger than needed prefix (error)" =
+    test {|multi "
+        echo 1
+          echo 2
+         "|};
+    [%expect {| Error: :4:1-4:11: Whitespace prefix does not match |}]
+
+  let%expect_test "multi-line string with non-whitespace prefix (error)" =
+    test {|multi "
+        echo 1
+          echo 2
+      2 "|};
+    [%expect {| Error: :4:8-4:10: The final line of a multi-line string must be whitespace |}]
+
+  let%expect_test "newline in single-line raw strings is not allowed" =
+    test {|- #"multiline
+               raw string
+      "#|};
+    [%expect {| Error: :1:14-2:1: Multi-line string must begin with a newline character |}]
+
+  let%expect_test "newline in single-line strings is not allowed" =
     test {|- "multiline
 
       string
       "|};
+    [%expect {| Error: :1:13-2:1: Multi-line string must begin with a newline character |}]
+
+  let%expect_test "last line of the multi-line string must be whitespace" =
+    test {|multi-line "
+                      foo
+                  This is the base indentation
+                          bar
+             abcd "|};
     [%expect {|
-      (- (string  "multiline\
-                 \n\
-                 \n      string\
-                 \n      ")) |}]
-
-  let%expect_test "raw strings" =
-    test {|- r"this is a raw string"|};
-    [%expect {| (- (string "this is a raw string")) |}]
-
-  let%expect_test "raw strings also can be multiline" =
-    test {|- r"multiline
-               raw string
-      "|};
-    [%expect {|
-      (- (string  "multiline\
-                 \n               raw string\
-                 \n      ")) |}]
-
-  let%expect_test "raw strings can be enclosed by arbitrary number of #" =
-    test {|- r####"raw " string"####   r##"raw "# string"##|};
-    [%expect {| (- (string "raw \" string") (string "raw \"# string")) |}]
-
-  let%expect_test "raw strings can contain a \" followed by a greater number of #" =
-    (* TODO: Does this follow the spec? For example, it is incorrect in Rust. *)
-    test {|- r#"hello "## world"#   r"hello "# world"|};
-    [%expect {| (- (string "hello \"## world") (string "hello \"# world")) |}]
-
-  let%expect_test "unterminated raw string" =
-    test {|- r##"raw string"#|};
-    [%expect {| Error: :1:19-1:19: Unterminated raw string |}]
-
-  let%expect_test "closing the raw string with a greater number of #" =
-    (* Another possible choice is parsing the last # as an identifier *)
-    test {|- r#"raw string"##|};
-    [%expect {| Error: :1:19-1:19: Unterminated raw string |}]
+      Error: :5:18-5:20: The final line of a multi-line string must be whitespace |}]
 
   let%expect_test "escapes" =
     test {|- "\"\\\b\f\n\r\t"|};
@@ -384,7 +535,7 @@ let%test_module "strings" = (module struct
                  \n\r\t")) |}]
 
   let%expect_test "escapes should not be interpreted in a raw string" =
-    test {|- r#"\"\\\/\b\f\n\r\t"#|};
+    test {|- #"\"\\\/\b\f\n\r\t"#|};
     [%expect {| (- (string "\\\"\\\\\\/\\b\\f\\n\\r\\t")) |}]
 
   let%expect_test "\\u{...} unicode escapes" =
@@ -393,15 +544,15 @@ let%test_module "strings" = (module struct
 
   let%expect_test "\\u{...} cannot contain more than 6 hex digits" =
     test {|- "\u{1234567}"|};
-    [%expect {| Error: :1:4-1:15: Invalid unicode code point, cannot contain more than 6 hex digits |}]
+    [%expect {| Error: :1:4-1:15: Invalid unicode scalar value |}]
 
   let%expect_test "\\u{...} should not accept a > 0x10FFFF code point" =
     test {|- "\u{11FBBF} _"|};
-    [%expect {| Error: :1:4-1:14: Invalid unicode code point, cannot be greater than 10FFFF |}]
+    [%expect {| Error: :1:4-1:14: Invalid unicode scalar value |}]
 
   let%expect_test "empty \\u{} without the code point" =
     test {|- "\u{}"|};
-    [%expect {| (- (string "\\u{}")) |}]
+    [%expect {| Error: :1:4-1:6: Invalid escape sequence |}]
 
   let%expect_test "whitespace escape should remove space from the string" =
     test {|- "foo \   bar"|};
@@ -413,7 +564,7 @@ let%test_module "strings" = (module struct
     [%expect {| (- (string "foo bar")) |}]
 
   let%expect_test "whitespace escape should remove multiple newlines" =
-    (* This behavior is the same as in Rust
+    (* This behavior is the same as currently in Rust
        https://github.com/rust-lang/reference/pull/1042 *)
     test {|- "foo\
 
@@ -434,10 +585,10 @@ let%test_module "line continuations" = (module struct
 
   let%expect_test "line continuation should allow empty lines" =
     test {|
-      node true \
+      node #true \
         \
         \
-        false \
+        #false \
     |};
     [%expect {| (node (bool true) (bool false)) |}]
 
@@ -449,19 +600,19 @@ let%test_module "line continuations" = (module struct
 
   let%expect_test "multiline comments should be allowed after \\" =
     test {|
-      node true \ /* comment
+      node 0 \ /* comment
 
         comment */
-        false |};
-    [%expect {| (node (bool true) (bool false)) |}]
+        1 |};
+    [%expect {| (node (number-int 0) (number-int 1)) |}]
 
   let%expect_test "EOF is allowed after \\ followed by a comment" =
     test {|node \ // comment|};
     [%expect {| (node) |}]
 
-  let%expect_test "EOF is disallowed after \\ without comments" =
+  let%expect_test "EOF is allowed after \\ without comments" =
     test {|node \|};
-    [%expect {| Error: :1:7-1:7: Unexpected EOF after the '\' line continuation |}]
+    [%expect {| (node) |}]
 
   let%expect_test "the escline_comment_node.kdl test case" =
     (* TODO: What to do about it?
@@ -491,8 +642,8 @@ let%test_module "unicode" = (module struct
     [%expect {| ((node1) (node2) (node3)) |}]
 
   let%expect_test "NEL U+0085 and FF U+000C correctly update locations" =
-    test "node1\u{85}\u{85}\u{0C}\u{0C}\u{85}\u{85}😁 __error__\n";
-    [%expect {| Error: :7:3-7:12: Expected a value, got an identifier |}]
+    test "node1\u{85}\u{85}\u{0C}\u{0C}\u{85}\u{85}😁 #__error__\n";
+    [%expect {| Error: :7:3-7:13: Unknown keyword #__error__ |}]
 
   let%expect_test "BOM is ignored" =
     test "\u{FEFF}node";
@@ -502,7 +653,7 @@ end)
 let%expect_test "the type annotations example" =
   test {|
     numbers (u8)10 (i32)20 myfloat=(f32)1.5 {
-      strings (uuid)"123e4567-e89b-12d3-a456-426614174000" (date)"2021-02-03" filter=(regex)r"$\d+"
+      strings (uuid)"123e4567-e89b-12d3-a456-426614174000" (date)"2021-02-03" filter=(regex)#"$\d+"#
       (author)person name="Alex"
     }
   |};
@@ -516,48 +667,53 @@ let%expect_test "the type annotations example" =
 
 let%expect_test "the ci example" =
   test {|
-    name "CI"
+    name CI
 
-    on "push" "pull_request"
+    on push pull_request
 
     env {
-      RUSTFLAGS "-Dwarnings"
+      RUSTFLAGS -Dwarnings
     }
 
     jobs {
       fmt_and_docs "Check fmt & build docs" {
-        runs-on "ubuntu-latest"
+        runs-on ubuntu-latest
         steps {
           step uses="actions/checkout@v1"
           step "Install Rust" uses="actions-rs/toolchain@v1" {
-            profile "minimal"
-            toolchain "stable"
-            components "rustfmt"
-            override true
+            profile minimal
+            toolchain stable
+            components rustfmt
+            override #true
           }
-          step "rustfmt" run="cargo fmt --all -- --check"
-          step "docs" run="cargo doc --no-deps"
+          step rustfmt { run cargo fmt --all -- --check }
+          step docs { run cargo doc --no-deps }
         }
       }
       build_and_test "Build & Test" {
         runs-on "${{ matrix.os }}"
         strategy {
           matrix {
-            rust "1.46.0" "stable"
-            os "ubuntu-latest" "macOS-latest" "windows-latest"
+            rust "1.46.0" stable
+            os ubuntu-latest macOS-latest windows-latest
           }
         }
 
         steps {
           step uses="actions/checkout@v1"
           step "Install Rust" uses="actions-rs/toolchain@v1" {
-            profile "minimal"
+            profile minimal
             toolchain "${{ matrix.rust }}"
-            components "clippy"
-            override true
+            components clippy
+            override #true
           }
-          step "Clippy" run="cargo clippy --all -- -D warnings"
-          step "Run tests" run="cargo test --all --verbose"
+          step Clippy { run cargo clippy --all -- -D warnings }
+          step "Run tests" { run cargo test --all --verbose }
+          step "Other Stuff" run="
+            echo foo
+            echo bar
+            echo baz
+            "
         }
       }
     }
@@ -576,8 +732,11 @@ let%expect_test "the ci example" =
             (children (profile (string minimal)) (toolchain (string stable))
              (components (string rustfmt)) (override (bool true))))
            (step (string rustfmt)
-            (prop run (string "cargo fmt --all -- --check")))
-           (step (string docs) (prop run (string "cargo doc --no-deps")))))))
+            (children
+             (run (string cargo) (string fmt) (string --all) (string --)
+              (string --check))))
+           (step (string docs)
+            (children (run (string cargo) (string doc) (string --no-deps))))))))
        (build_and_test (string "Build & Test")
         (children (runs-on (string "${{ matrix.os }}"))
          (strategy
@@ -594,6 +753,13 @@ let%expect_test "the ci example" =
              (toolchain (string "${{ matrix.rust }}"))
              (components (string clippy)) (override (bool true))))
            (step (string Clippy)
-            (prop run (string "cargo clippy --all -- -D warnings")))
+            (children
+             (run (string cargo) (string clippy) (string --all) (string --)
+              (string -D) (string warnings))))
            (step (string "Run tests")
-            (prop run (string "cargo test --all --verbose")))))))))) |}]
+            (children
+             (run (string cargo) (string test) (string --all) (string --verbose))))
+           (step (string "Other Stuff")
+            (prop run (string  "echo foo\
+                              \necho bar\
+                              \necho baz")))))))))) |}]

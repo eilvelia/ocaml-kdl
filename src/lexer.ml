@@ -24,7 +24,6 @@ let space_char = [%sedlex.regexp?
   | 0x202F (* Narrow No-Break Space U+202F *)
   | 0x205F (* Medium Mathematical Space U+205F *)
   | 0x3000 (* Ideographic Space U+3000 *)
-  | 0xFEFF (* BOM U+FEFF *)
 ]
 
 let ws = [%sedlex.regexp? Plus space_char]
@@ -40,7 +39,14 @@ let newline_char = [%sedlex.regexp?
 
 let newline = [%sedlex.regexp? "\r\n" | newline_char]
 
-(* With this defined as [%sedlex.regexp? ascii_hex_digit], the
+let equals_sign = [%sedlex.regexp?
+    '=' (* Equals Sign U+003D *)
+  | 0xFE66 (* Small Equals Sign U+FE66 *)
+  | 0xFF1D (* Fullwidth Equals Sign U+FF1D *)
+  | 0x1F7F0 (* Heavy Equals Sign U+1F7F0 *)
+]
+
+(* Note: With this defined as [%sedlex.regexp? ascii_hex_digit], the
    [(integer | float) identchar+] case surprisingly doesn't work correctly *)
 let hex_digit = [%sedlex.regexp? Chars "0123456789abcdefABCDEF"]
 
@@ -60,20 +66,26 @@ let binary = [%sedlex.regexp? Opt sign, "0b", Chars "01", Star (Chars "01_")]
 let integer = [%sedlex.regexp? decimal_int | hex | octal | binary]
 let float = [%sedlex.regexp? decimal_float]
 
-(* Disallowed identifier characters as per the spec: {|
-   Any codepoint with hexadecimal value 0x20 or below
-   Any codepoint with hexadecimal value higher than 0x10FFFF
-   Any of \/(){}<>;[]=,"    |} *)
-let nonident_char = [%sedlex.regexp? Chars "\\/(){}<>;[]=,\""
-                                     | 0 .. 0x20
+let disallowed_char = [%sedlex.regexp?
+    0 .. 0x19
+  | 0x7F (* Delete *)
+  (* Direction control *)
+  | 0x2066 .. 0x2069 | 0x202A .. 0x202E | 0x200E | 0x200F
+]
+
+let nonident_char = [%sedlex.regexp? Chars "(){}[]/\\\"#;"
+                                     | disallowed_char
+                                     | equals_sign
                                      | space_char
-                                     | newline_char]
+                                     | newline_char
+                                     | 0xFEFF ]
 let identchar = [%sedlex.regexp? Sub (any, nonident_char)]
 let startident = [%sedlex.regexp? Sub (identchar, '0'..'9')]
 
 let[@inline] new_line lexbuf =
-  let lexeme = Sedlexing.Utf8.lexeme lexbuf in
-  if lexeme <> "\n" && lexeme <> "\r\n" then
+  (* Add newline to the position info if the lexeme doesn't end with \n *)
+  let u = Sedlexing.lexeme_char lexbuf (Sedlexing.lexeme_length lexbuf - 1) in
+  if Uchar.to_int u <> Char.code '\n' then
     Sedlexing.new_line lexbuf
 
 let string_buffer = Buffer.create 256
@@ -82,12 +94,6 @@ let string_start_pos = ref Lexing.dummy_pos
 let[@inline] set_string_start lexbuf =
   let start_pos, _ = Sedlexing.lexing_positions lexbuf in
   string_start_pos := start_pos
-
-(* let[@inline] recover_string_location lexbuf =
-  Sedlexing.mark lexbuf 0x1000;
-  Sedlexing.set_position lexbuf !string_start_pos;
-  Sedlexing.start lexbuf;
-  ignore @@ Sedlexing.backtrack lexbuf *)
 
 let rec comment depth lexbuf =
   match%sedlex lexbuf with
@@ -111,63 +117,141 @@ let rec whitespace_escape lexbuf =
   | ws -> whitespace_escape lexbuf
   | _ -> ()
 
-let rec raw_string hashlen lexbuf =
-  match%sedlex lexbuf with
-  | newline ->
-    new_line lexbuf;
-    Buffer.add_string string_buffer (Sedlexing.Utf8.lexeme lexbuf);
-    raw_string hashlen lexbuf
-  | '"', Star '#' ->
-    (* TODO: Do not consume more hashes than needed? *)
-    let hashes =
-      Sedlexing.Utf8.sub_lexeme lexbuf 1 (Sedlexing.lexeme_length lexbuf - 1) in
-    let hashlen' = String.length hashes in
-    if hashlen = hashlen' then
-      RAW_STRING (Buffer.contents string_buffer)
-    else begin
-      Buffer.add_string string_buffer (Sedlexing.Utf8.lexeme lexbuf);
-      raw_string hashlen lexbuf
-    end
-  | eof -> error "Unterminated raw string"
-  | any ->
-    Buffer.add_string string_buffer (Sedlexing.Utf8.lexeme lexbuf);
-    raw_string hashlen lexbuf
-  | _ -> assert false
+let dedent ~prefix str =
+  let prefix_len = String.length prefix in
+  Buffer.reset string_buffer;
+  let line_i = ref 0 in
+  for i = 0 to String.length str - 1 do
+    let ch = String.unsafe_get str i in
+    if !line_i < prefix_len && (!line_i != 0 || ch != '\xFF') then begin
+      if ch <> String.get prefix !line_i then
+        error "Whitespace prefix does not match"
+    end else if ch = '\xFF' then begin
+      (* The last newline is trimmed *)
+      if i != String.length str - 1 then
+        (* Newline is normalized to \n *)
+        (Buffer.add_char string_buffer '\n'; line_i := -1)
+    end else begin
+      Buffer.add_char string_buffer ch
+    end;
+    incr line_i
+  done;
+  Buffer.contents string_buffer
 
-let rec string lexbuf =
+let[@inline] check_hashlen ~exp (got : int) =
+  if got > exp then
+    error (sprintf "Expected %d hash symbol(s), got %d" exp got)
+  else got = exp
+
+let raw_string ~multi exp_hashlen lexbuf =
+  let rec recur linestart =
+    match%sedlex lexbuf with
+    | newline ->
+      new_line lexbuf;
+      if not multi then
+        error "Multi-line string must begin with a newline character";
+      (* Mark literal newline with an invalid UTF-8 character *)
+      Buffer.add_uint8 string_buffer 0xFF;
+      recur true
+    | ws, '"', Plus '#' ->
+      let quote_pos =
+        let rec go pos =
+          if Sedlexing.lexeme_char lexbuf pos = Uchar.of_char '"' then pos
+          else go (pos + 1)
+        in
+        go 0
+      in
+      let hashlen = Sedlexing.lexeme_length lexbuf - quote_pos - 1 in
+      if check_hashlen ~exp:exp_hashlen hashlen then begin
+        let prefix = Sedlexing.Utf8.sub_lexeme lexbuf 0 quote_pos in
+        if multi && linestart then
+          RAW_STRING (dedent ~prefix (Buffer.contents string_buffer))
+        else if multi then
+          error "The final line of a multi-line string must be whitespace"
+        else begin
+          Buffer.add_string string_buffer prefix;
+          RAW_STRING (Buffer.contents string_buffer)
+        end
+      end else begin
+        Buffer.add_string string_buffer (Sedlexing.Utf8.lexeme lexbuf);
+        recur false
+      end
+    | '"', Plus '#' ->
+      let hashlen = Sedlexing.lexeme_length lexbuf - 1 in
+      if check_hashlen ~exp:exp_hashlen hashlen then begin
+        if multi && linestart then
+          RAW_STRING (dedent ~prefix:"" (Buffer.contents string_buffer))
+        else if multi then
+          error "The final line of a multi-line string must be whitespace"
+        else RAW_STRING (Buffer.contents string_buffer)
+      end else begin
+        Buffer.add_string string_buffer (Sedlexing.Utf8.lexeme lexbuf);
+        recur false
+      end
+    | disallowed_char -> error "Illegal character"
+    | eof -> error "Unterminated raw string"
+    | any ->
+      Buffer.add_string string_buffer (Sedlexing.Utf8.lexeme lexbuf);
+      recur false
+    | _ -> assert false
+  in
+  recur true
+
+let rec string ~multi linestart lexbuf =
   match%sedlex lexbuf with
   | newline ->
     new_line lexbuf;
-    Buffer.add_string string_buffer (Sedlexing.Utf8.lexeme lexbuf);
-    string lexbuf
-  | "\\n" -> Buffer.add_char string_buffer '\n'; string lexbuf
-  | "\\r" -> Buffer.add_char string_buffer '\r'; string lexbuf
-  | "\\t" -> Buffer.add_char string_buffer '\t'; string lexbuf
-  | "\\\\" -> Buffer.add_char string_buffer '\\'; string lexbuf
-  | "\\\"" -> Buffer.add_char string_buffer '"'; string lexbuf
-  | "\\b" -> Buffer.add_char string_buffer '\b'; string lexbuf
-  | "\\f" -> Buffer.add_char string_buffer '\012'; string lexbuf
+    if not multi then
+      error "Multi-line string must begin with a newline character";
+    (* Mark literal newline with an invalid UTF-8 character *)
+    Buffer.add_uint8 string_buffer 0xFF;
+    string ~multi true lexbuf
+  | "\\n" -> Buffer.add_char string_buffer '\n'; string ~multi false lexbuf
+  | "\\r" -> Buffer.add_char string_buffer '\r'; string ~multi false lexbuf
+  | "\\t" -> Buffer.add_char string_buffer '\t'; string ~multi false lexbuf
+  | "\\\\" -> Buffer.add_char string_buffer '\\'; string ~multi false lexbuf
+  | "\\\"" -> Buffer.add_char string_buffer '"'; string ~multi false lexbuf
+  | "\\b" -> Buffer.add_char string_buffer '\b'; string ~multi false lexbuf
+  | "\\f" -> Buffer.add_char string_buffer '\012'; string ~multi false lexbuf
+  | "\\s" -> Buffer.add_char string_buffer ' '; string ~multi false lexbuf
   | "\\u{", Plus hex_digit, '}' ->
     let code_str =
       Sedlexing.Utf8.sub_lexeme lexbuf 3 (Sedlexing.lexeme_length lexbuf - 4) in
     if String.length code_str > 6 then
-      error "Invalid unicode code point, cannot contain more than 6 hex digits";
+      error "Invalid unicode scalar value";
     let code = int_of_string @@ "0x" ^ code_str in
-    if code > 0x10FFFF then
-      error "Invalid unicode code point, cannot be greater than 10FFFF";
     if not @@ Uchar.is_valid code then
-      error "Invalid unicode code point";
+      error "Invalid unicode scalar value";
     Buffer.add_utf_8_uchar string_buffer (Uchar.unsafe_of_int code);
-    string lexbuf
-  | '\\', ws -> whitespace_escape lexbuf; string lexbuf
-  | '\\', newline -> new_line lexbuf; whitespace_escape lexbuf; string lexbuf
-  (* TODO: Should we error in case of invalid escape sequences? *)
+    string ~multi false lexbuf
+  | '\\', ws -> whitespace_escape lexbuf; string ~multi false lexbuf
+  | '\\', newline ->
+    new_line lexbuf;
+    whitespace_escape lexbuf;
+    string ~multi false lexbuf (* TODO: Is linestart=false correct? *)
+  | '\\', any -> error "Invalid escape sequence"
+  | ws, '"' ->
+    let prefix =
+      Sedlexing.Utf8.sub_lexeme lexbuf 0 (Sedlexing.lexeme_length lexbuf - 1) in
+    if multi && linestart then
+      QUOTED_STRING (dedent ~prefix (Buffer.contents string_buffer))
+    else if multi then
+      error "The final line of a multi-line string must be whitespace"
+    else begin
+      Buffer.add_string string_buffer prefix;
+      QUOTED_STRING (Buffer.contents string_buffer)
+    end
   | '"' ->
-    STRING (Buffer.contents string_buffer)
+    if multi && linestart then
+      QUOTED_STRING (dedent ~prefix:"" (Buffer.contents string_buffer))
+    else if multi then
+      error "The final line of a multi-line string must be whitespace"
+    else QUOTED_STRING (Buffer.contents string_buffer)
+  | disallowed_char -> error "Illegal character"
   | eof -> error "Unterminated string"
   | any ->
     Buffer.add_string string_buffer (Sedlexing.Utf8.lexeme lexbuf);
-    string lexbuf
+    string ~multi false lexbuf
   | _ -> assert false
 
 let rec line_cont lexbuf =
@@ -176,7 +260,7 @@ let rec line_cont lexbuf =
   | newline -> new_line lexbuf
   | "//" -> line_comment lexbuf
   | "/*" -> comment 0 lexbuf; line_cont lexbuf
-  | eof -> error "Unexpected EOF after the '\\' line continuation"
+  | eof -> ()
   | any -> error
     @@ sprintf "Illegal character '%s' after the '\\' line continuation"
       (Sedlexing.Utf8.lexeme lexbuf)
@@ -195,27 +279,51 @@ let rec main lexbuf =
   | ')' -> RPAREN
   | '{' -> LBRACE
   | '}' -> RBRACE
-  | '=' -> EQ
-  | "true" -> TRUE
-  | "false" -> FALSE
-  | "null" -> NULL
+  | equals_sign -> EQ
+  | '#', Plus identchar ->
+    begin match Sedlexing.Utf8.lexeme lexbuf with
+    | "#true" -> TRUE
+    | "#false" -> FALSE
+    | "#null" -> NULL
+    | "#inf" -> FLOAT "inf"
+    | "#-inf" -> FLOAT "-inf"
+    | "#nan" -> FLOAT "nan"
+    | k -> error ("Unknown keyword " ^ k)
+    end
   | integer -> INTEGER (Sedlexing.Utf8.lexeme lexbuf)
   | float -> FLOAT (Sedlexing.Utf8.lexeme lexbuf)
   | (integer | float), Plus identchar ->
     error @@ sprintf "Invalid number literal %s" (Sedlexing.Utf8.lexeme lexbuf)
-  | 'r', Star '#', '"' ->
-    let hashes =
-      Sedlexing.Utf8.sub_lexeme lexbuf 1 (Sedlexing.lexeme_length lexbuf - 2) in
+  | Plus '#', '"', newline ->
+    let[@inline] rec count_hashes lexbuf i =
+      if Uchar.to_int (Sedlexing.lexeme_char lexbuf i) = Char.code '#' then
+        count_hashes lexbuf (i + 1)
+      else i
+    in
+    let hashlen = count_hashes lexbuf 0 in
     Buffer.reset string_buffer;
     set_string_start lexbuf;
-    raw_string (String.length hashes) lexbuf
+    raw_string ~multi:true hashlen lexbuf
+  | Plus '#', '"' ->
+    let hashlen = Sedlexing.lexeme_length lexbuf - 1 in
+    Buffer.reset string_buffer;
+    set_string_start lexbuf;
+    raw_string ~multi:false hashlen lexbuf
+  | '"', newline ->
+    new_line lexbuf;
+    Buffer.reset string_buffer;
+    set_string_start lexbuf;
+    string ~multi:true true lexbuf
   | '"' ->
     Buffer.reset string_buffer;
     set_string_start lexbuf;
-    string lexbuf
-  | "r#", Star identchar -> error "An identifier cannot start with r#"
+    string ~multi:false true lexbuf
+  | 0xFEFF -> BOM
+  | Opt sign, '.', '0'..'9', Star identchar ->
+    error "Number-like identifiers are invalid and must be quoted"
   | sign, Opt (startident, Star identchar)
-  | Sub (startident, sign), Star identchar -> IDENT (Sedlexing.Utf8.lexeme lexbuf)
+  | Sub (startident, sign), Star identchar ->
+    IDENT_STRING (Sedlexing.Utf8.lexeme lexbuf)
   | eof -> EOF
   | any -> error @@ sprintf "Illegal character '%s'" (Sedlexing.Utf8.lexeme lexbuf)
   | _ -> assert false
@@ -224,38 +332,11 @@ let rec main lexbuf =
 let main_tokenizer lexbuf =
   let lexer () =
     let token = main lexbuf in
-    let start_pos', end_pos = Sedlexing.lexing_positions lexbuf in
+    let start_pos, end_pos = Sedlexing.lexing_positions lexbuf in
     let start_pos = match token with
-      | STRING _ | RAW_STRING _ -> !string_start_pos
-      | _ -> start_pos'
+      | QUOTED_STRING _ | RAW_STRING _ -> !string_start_pos
+      | _ -> start_pos
     in
     token, start_pos, end_pos
   in
   lexer
-
-(* let query_identchar = [%sedlex.regexp? Sub (identchar, Chars "+~|^$*")]
-let query_startident = [%sedlex.regexp? Sub (query_identchar, '0'..'9')]
-
-(* Lexical analyzer for the KDL Query Language *)
-let rec query lexbuf =
-  match%sedlex lexbuf with
-  | ws -> query lexbuf
-  | newline -> new_line lexbuf; query lexbuf
-  | '[' -> LBRACKET
-  | ']' -> RBRACKET
-  | '>' -> GT
-  | ">=" -> GTE
-  | '<' -> LT
-  | "<=" -> LTE
-  | '+' -> PLUS
-  | '~' -> TILDE
-  | "||" -> PARALLEL
-  | "^=" -> CARET_EQ
-  | "$=" -> DOLLAR_EQ
-  | "*=" -> STAR_EQ
-  | sign, Opt (query_startident, Star query_identchar)
-  | Sub (query_startident, sign), Star query_identchar ->
-    IDENT (Sedlexing.Utf8.lexeme lexbuf)
-  | any ->
-    error @@ sprintf "Illegal character '%s'" (Sedlexing.Utf8.lexeme lexbuf)
-  | _ -> assert false *)

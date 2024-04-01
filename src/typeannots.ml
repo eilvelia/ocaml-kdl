@@ -92,8 +92,8 @@ let interpret : annot_value -> [> typed_value] =
   | Some "f64", _ -> error "f64 expects a numeric value"
 
   | Some "base64", `String base64 ->
-    (try `Base64 (Base64.decode base64)
-    with Base64.Error descr -> error descr)
+    (try `Base64 (Base64.decode base64) with
+    | Base64.Error descr -> error descr)
   | Some "base64", _ -> error "base64 expects a string value"
 
   | Some annot, value -> `Other (annot, value)

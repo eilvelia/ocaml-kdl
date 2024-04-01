@@ -7,6 +7,11 @@ module Num = struct
     | `Decimal of string
   ]
 
+  (* Note: Float.to_string outputs "inf", "-inf", "nan" for the infinity,
+     neg_infinity, and nan values respectively; Float.of_string can parse those
+     strings. That makes the functions suitable for KDL's #inf, #-inf, #nan
+     as-is. *)
+
   let to_string : [< t ] -> string = function
     | `Int int -> Int.to_string int
     | `Int_raw str
@@ -56,10 +61,12 @@ module Num = struct
     let[@inline] to_unsigned_literal lit =
       (* 42 -> 0u42, 0x42 -> 0x42, etc. somewhat hacky *)
       if String.length lit >= 1 && lit.[0] = '-'
-        && not (String.length lit = 2 && lit.[1] = '0') then None else
-      let with_prefix = String.length lit >= 3
-        && (lit.[1] = 'x' || lit.[1] = 'o' || lit.[1] = 'b') in
-      Some (if with_prefix then lit else "0u" ^ lit)
+         && not (String.length lit = 2 && lit.[1] = '0') then
+        None
+      else
+        let with_prefix = String.length lit >= 3
+          && (lit.[1] = 'x' || lit.[1] = 'o' || lit.[1] = 'b') in
+        Some (if with_prefix then lit else "0u" ^ lit)
   end
 
   let to_int : [< t ] -> int option = function
@@ -236,10 +243,10 @@ type annot_value = string option * value
 type prop = string * annot_value
 
 type node = {
-  name : string; (** An identifier or a quoted string *)
+  name : string;
   annot : string option;
   args : annot_value list;
-  props : prop list; (** [props] is an assoc list; the order of [props] is unspecified *)
+  props : prop list; (** [props] is an assoc list; the order is unspecified *)
   children : node list;
 }
 
@@ -262,7 +269,7 @@ let equal_prop (name1, annot_value1 : prop) (name2, annot_value2 : prop) =
 
 open struct
   (* This is the implementation of List.equal from OCaml 4.14.0, present
-    for backward compatibility with OCaml < 4.12.0 *)
+     for backward compatibility with OCaml < 4.12.0 *)
   let rec list_equal eq l1 l2 =
     match l1, l2 with
     | [], [] -> true

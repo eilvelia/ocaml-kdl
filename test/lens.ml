@@ -1,13 +1,14 @@
 (* Lenses are not extensively tested for now, this contains some basic tests
    for complicated cases *)
 
-let doc = Kdl.of_string_exn {|
-  contents null {
+let doc = try Kdl.of_string_exn {|
+  contents #null {
     section "First section" {
       paragraph "This is the first paragraph"
       paragraph "This is the second paragraph"
     }
-  }; node1 true; node2 false|}
+  }; node1 #true; node2 #false|}
+  with Kdl.Parse_error e -> failwith (Kdl.show_error e)
 
 open Kdl.L
 
@@ -23,41 +24,41 @@ let%expect_test "each set 1" =
   print @@ doc.@(lens) <- [`String "foo"; `String "bar"];
   print @@ doc.@(lens) <- [`String "foo"; `String "bar"; `String "baz"];
   [%expect {|
-    contents null {
+    contents #null {
       section "First section" {
         paragraph "This is the first paragraph"
         paragraph "This is the second paragraph"
       }
     }
-    node1 true
-    node2 false
+    node1 #true
+    node2 #false
 
-    contents null {
+    contents #null {
       section "First section" {
         paragraph "foo"
         paragraph "This is the second paragraph"
       }
     }
-    node1 true
-    node2 false
+    node1 #true
+    node2 #false
 
-    contents null {
+    contents #null {
       section "First section" {
         paragraph "foo"
         paragraph "bar"
       }
     }
-    node1 true
-    node2 false
+    node1 #true
+    node2 #false
 
-    contents null {
+    contents #null {
       section "First section" {
         paragraph "foo"
         paragraph "bar"
       }
     }
-    node1 true
-    node2 false |}]
+    node1 #true
+    node2 #false |}]
 
 let%expect_test "each set 2" =
   print @@ doc.@(each @@ arg 0 // value) <- [`String "foo"];
@@ -69,8 +70,8 @@ let%expect_test "each set 2" =
         paragraph "This is the second paragraph"
       }
     }
-    node1 true
-    node2 false
+    node1 #true
+    node2 #false
 
     contents "foo" {
       section "First section" {
@@ -78,8 +79,8 @@ let%expect_test "each set 2" =
         paragraph "This is the second paragraph"
       }
     }
-    node1 null
-    node2 false |}]
+    node1 #null
+    node2 #false |}]
 
 let%expect_test "the string lens" =
   print_endline

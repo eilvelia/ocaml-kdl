@@ -3,13 +3,16 @@
 [ci-badge]: https://github.com/Bannerets/ocaml-kdl/actions/workflows/ci.yml/badge.svg
 [ci-page]: https://github.com/Bannerets/ocaml-kdl/actions/workflows/ci.yml
 
-An OCaml implementation of the [KDL][] 1.0 document language.
+An OCaml implementation of the [KDL][] Document Language, version 2.0.0.
 
 [KDL]: https://github.com/kdl-org/kdl
 
 ```console
 $ opam install kdl
 ```
+
+**Note**: This is the working version for KDL v2. For the published version of
+ocaml-kdl for KDL v1, see the `v0.1.0` tag.
 
 ## Features
 

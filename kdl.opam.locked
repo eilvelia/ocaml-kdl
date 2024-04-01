@@ -2,10 +2,10 @@ opam-version: "2.0"
 name: "kdl"
 version: "0.1.0"
 synopsis: "OCaml implementation of the KDL document laguage"
-maintainer: "github.com/Bannerets <comonoid@protonmail.com>"
-authors: "github.com/Bannerets <comonoid@protonmail.com>"
-license: "MIT"
-tags: [ "configuration-language" "data-serialization-language"]
+maintainer: "https://github.com/Bannerets <comonoid@protonmail.com>"
+authors: "https://github.com/Bannerets <comonoid@protonmail.com>"
+license: "BlueOak-1.0.0"
+tags: [ "configuration-language" "data-serialization-format"]
 homepage: "https://github.com/Bannerets/ocaml-kdl"
 bug-reports: "https://github.com/Bannerets/ocaml-kdl/issues"
 depends: [
@@ -16,27 +16,30 @@ depends: [
   "base-unix" {= "base"}
   "camlp-streams" {= "5.0.1" & with-doc}
   "cmdliner" {= "1.2.0" & with-doc}
+  "conf-bash" {= "1" & with-test}
   "cppo" {= "1.6.9" & with-doc}
+  "crunch" {= "3.3.1" & with-doc}
   "csexp" {= "1.5.2" & with-test}
-  "dune" {= "3.11.1"}
-  "dune-configurator" {= "3.11.1" & with-test}
+  "dune" {= "3.14.2"}
+  "dune-configurator" {= "3.14.2" & with-test}
   "fmt" {= "0.9.0" & with-doc}
   "fpath" {= "0.7.3" & with-doc}
   "gen" {= "1.1"}
   "jane-street-headers" {= "v0.16.0" & with-test}
   "jst-config" {= "v0.16.0" & with-test}
-  "menhir" {= "20230608"}
-  "menhirLib" {= "20230608"}
-  "menhirSdk" {= "20230608"}
+  "menhir" {= "20231231"}
+  "menhirCST" {= "20231231"}
+  "menhirLib" {= "20231231"}
+  "menhirSdk" {= "20231231"}
   "ocaml" {= "4.14.1"}
   "ocaml-base-compiler" {= "4.14.1"}
   "ocaml-compiler-libs" {= "v0.12.4"}
   "ocaml-config" {= "2"}
   "ocaml-options-vanilla" {= "1"}
-  "ocamlbuild" {= "0.14.2" & with-doc}
+  "ocamlbuild" {= "0.14.3" & with-doc}
   "ocamlfind" {= "1.9.6" & with-doc}
-  "odoc" {= "2.2.1" & with-doc}
-  "odoc-parser" {= "2.0.0" & with-doc}
+  "odoc" {= "2.4.1" & with-doc}
+  "odoc-parser" {= "2.4.1" & with-doc}
   "ppx_assert" {= "v0.16.0" & with-test}
   "ppx_base" {= "v0.16.0" & with-test}
   "ppx_cold" {= "v0.16.0" & with-test}
@@ -50,7 +53,8 @@ depends: [
   "ppx_inline_test" {= "v0.16.1" & with-test}
   "ppx_optcomp" {= "v0.16.0" & with-test}
   "ppx_sexp_conv" {= "v0.16.0" & with-test}
-  "ppxlib" {= "0.31.0"}
+  "ppxlib" {= "0.32.0"}
+  "ptime" {= "1.1.0" & with-doc}
   "re" {= "1.11.0" & with-test}
   "result" {= "1.5" & with-doc}
   "sedlex" {= "3.2"}
