@@ -2,12 +2,12 @@ opam-version: "2.0"
 name: "kdl"
 version: "0.1.0"
 synopsis: "OCaml implementation of the KDL document laguage"
-maintainer: "https://github.com/Bannerets <comonoid@protonmail.com>"
-authors: "https://github.com/Bannerets <comonoid@protonmail.com>"
+maintainer: "eilvelia <hi@eilvelia.cat>"
+authors: "eilvelia <hi@eilvelia.cat>"
 license: "BlueOak-1.0.0"
 tags: [ "configuration-language" "data-serialization-format"]
-homepage: "https://github.com/Bannerets/ocaml-kdl"
-bug-reports: "https://github.com/Bannerets/ocaml-kdl/issues"
+homepage: "https://github.com/eilvelia/ocaml-kdl"
+bug-reports: "https://github.com/eilvelia/ocaml-kdl/issues"
 depends: [
   "astring" {= "0.8.5" & with-doc}
   "base" {= "v0.16.3" & with-test}
@@ -77,4 +77,4 @@ build: [
   "@runtest" {with-test}
   "@doc" {with-doc}
 ]
-dev-repo: "git+https://github.com/Bannerets/ocaml-kdl.git"
+dev-repo: "git+https://github.com/eilvelia/ocaml-kdl.git"

@@ -2,13 +2,13 @@ opam-version: "2.0"
 name: "kdl"
 version: "0.1.0"
 synopsis: "OCaml implementation of the KDL document laguage"
-maintainer: "https://github.com/Bannerets <comonoid@protonmail.com>"
-authors: "https://github.com/Bannerets <comonoid@protonmail.com>"
+maintainer: "eilvelia <hi@eilvelia.cat>"
+authors: "eilvelia <hi@eilvelia.cat>"
 license: "BlueOak-1.0.0"
 tags: ["configuration-language" "data-serialization-format"]
-homepage: "https://github.com/Bannerets/ocaml-kdl"
-bug-reports: "https://github.com/Bannerets/ocaml-kdl/issues"
-dev-repo: "git+https://github.com/Bannerets/ocaml-kdl.git"
+homepage: "https://github.com/eilvelia/ocaml-kdl"
+bug-reports: "https://github.com/eilvelia/ocaml-kdl/issues"
+dev-repo: "git+https://github.com/eilvelia/ocaml-kdl.git"
 depends: [
   "ocaml" {>= "4.10"}
   "dune" {>= "3.0"}

@@ -1,9 +1,9 @@
 # ocaml-kdl &nbsp; [![CI][ci-badge]][ci-page]
 
-[ci-badge]: https://github.com/Bannerets/ocaml-kdl/actions/workflows/ci.yml/badge.svg
-[ci-page]: https://github.com/Bannerets/ocaml-kdl/actions/workflows/ci.yml
+[ci-badge]: https://github.com/eilvelia/ocaml-kdl/actions/workflows/ci.yml/badge.svg
+[ci-page]: https://github.com/eilvelia/ocaml-kdl/actions/workflows/ci.yml
 
-An OCaml implementation of the [KDL][] Document Language, version 2.0.0.
+An OCaml implementation of the [KDL][] Document Language 2.0.0.
 
 [KDL]: https://github.com/kdl-org/kdl
 
