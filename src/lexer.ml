@@ -3,7 +3,6 @@ open Printf
 
 let error msg = raise @@ Err.CustomLexingError msg
 
-(* Note: [Compl] doesn't seem to work *)
 let space_char = [%sedlex.regexp?
     '\t'   (* Character Tabulation U+0009 *)
   | 0x000B (* Line Tabulation U+000B *)
@@ -123,12 +122,12 @@ let dedent ~prefix str =
   let line_i = ref 0 in
   for i = 0 to String.length str - 1 do
     let ch = String.unsafe_get str i in
-    if !line_i < prefix_len && (!line_i != 0 || ch != '\xFF') then begin
+    if !line_i < prefix_len && (!line_i <> 0 || ch <> '\xFF') then begin
       if ch <> String.get prefix !line_i then
         error "Whitespace prefix does not match"
     end else if ch = '\xFF' then begin
       (* The last newline is trimmed *)
-      if i != String.length str - 1 then
+      if i <> String.length str - 1 then
         (* Newline is normalized to \n *)
         (Buffer.add_char string_buffer '\n'; line_i := -1)
     end else begin
@@ -156,8 +155,8 @@ let raw_string ~multi exp_hashlen lexbuf =
     | ws, '"', Plus '#' ->
       let quote_pos =
         let rec go pos =
-          if Sedlexing.lexeme_char lexbuf pos = Uchar.of_char '"' then pos
-          else go (pos + 1)
+          if Uchar.to_int (Sedlexing.lexeme_char lexbuf pos) = Char.code '"'
+          then pos else go (pos + 1)
         in
         go 0
       in
@@ -228,7 +227,7 @@ let rec string ~multi linestart lexbuf =
   | '\\', newline ->
     new_line lexbuf;
     whitespace_escape lexbuf;
-    string ~multi false lexbuf (* TODO: Is linestart=false correct? *)
+    string ~multi true lexbuf (* TODO: Is this correct? *)
   | '\\', any -> error "Invalid escape sequence"
   | ws, '"' ->
     let prefix =
