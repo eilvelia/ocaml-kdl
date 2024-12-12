@@ -2,7 +2,7 @@ name: CI
 on: [push, pull_request]
 jobs:
   main:
-    name: Test with OCaml v${{ matrix.ocaml }} on ${{ matrix.os }}
+    name: 'Test / OCaml v${{ matrix.ocaml }} / ${{ matrix.os }}'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -10,12 +10,13 @@ jobs:
         os:
           - ubuntu-latest
         ocaml:
+          - 5.2.x
           - 5.1.x
           - 4.14.x
           - 4.10.x
     steps:
-      - uses: actions/checkout@v3
-      - uses: ocaml/setup-ocaml@v2
+      - uses: actions/checkout@v4
+      - uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml }}
       - name: Install dependencies
