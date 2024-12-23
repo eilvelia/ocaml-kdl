@@ -1,9 +1,5 @@
 let read_file filename =
-  (* In_channel isn't used to support OCaml < 4.14 *)
-  let ch = open_in_bin filename in
-  Fun.protect
-    ~finally:(fun () -> close_in ch)
-    (fun () -> really_input_string ch (in_channel_length ch))
+  In_channel.with_open_bin filename In_channel.input_all
 
 let normalize_numbers =
   let normalize_float str =

@@ -13,7 +13,6 @@ jobs:
           - 5.2.x
           - 5.1.x
           - 4.14.x
-          - 4.10.x
     steps:
       - uses: actions/checkout@v4
       - uses: ocaml/setup-ocaml@v3

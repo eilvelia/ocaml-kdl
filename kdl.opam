@@ -10,7 +10,7 @@ homepage: "https://github.com/eilvelia/ocaml-kdl"
 bug-reports: "https://github.com/eilvelia/ocaml-kdl/issues"
 dev-repo: "git+https://github.com/eilvelia/ocaml-kdl.git"
 depends: [
-  "ocaml" {>= "4.10"}
+  "ocaml" {>= "4.14"}
   "dune" {>= "3.0"}
   "menhir"
   "menhirLib"
