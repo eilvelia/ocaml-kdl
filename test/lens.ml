@@ -1,14 +1,16 @@
 (* Lenses are not extensively tested for now, this contains some basic tests
    for complicated cases *)
 
-let doc = try Kdl.of_string_exn {|
+let doc =
+  try Kdl.of_string_exn {|
   contents #null {
     section "First section" {
       paragraph "This is the first paragraph"
       paragraph "This is the second paragraph"
     }
   }; node1 #true; node2 #false|}
-  with Kdl.Parse_error e -> failwith (Kdl.show_error e)
+  with Kdl.Parse_error err ->
+    failwith (Format.asprintf "%a" Kdl.pp_error err)
 
 open Kdl.L
 
@@ -35,7 +37,7 @@ let%expect_test "each set 1" =
 
     contents #null {
       section "First section" {
-        paragraph "foo"
+        paragraph foo
         paragraph "This is the second paragraph"
       }
     }
@@ -44,8 +46,8 @@ let%expect_test "each set 1" =
 
     contents #null {
       section "First section" {
-        paragraph "foo"
-        paragraph "bar"
+        paragraph foo
+        paragraph bar
       }
     }
     node1 #true
@@ -53,18 +55,19 @@ let%expect_test "each set 1" =
 
     contents #null {
       section "First section" {
-        paragraph "foo"
-        paragraph "bar"
+        paragraph foo
+        paragraph bar
       }
     }
     node1 #true
-    node2 #false |}]
+    node2 #false
+    |}]
 
 let%expect_test "each set 2" =
   print @@ doc.@(each @@ arg 0 // value) <- [`String "foo"];
   print @@ doc.@(each @@ args // each value) <- [[`String "foo"]; [`Null]];
   [%expect {|
-    contents "foo" {
+    contents foo {
       section "First section" {
         paragraph "This is the first paragraph"
         paragraph "This is the second paragraph"
@@ -73,14 +76,15 @@ let%expect_test "each set 2" =
     node1 #true
     node2 #false
 
-    contents "foo" {
+    contents foo {
       section "First section" {
         paragraph "This is the first paragraph"
         paragraph "This is the second paragraph"
       }
     }
     node1 #null
-    node2 #false |}]
+    node2 #false
+    |}]
 
 let%expect_test "the string lens" =
   print_endline
@@ -91,7 +95,7 @@ let%expect_test "the number lens" =
   let doc = Kdl.of_string_exn {|- 3.14|} in
   Format.printf "%a\n" Kdl.pp_value
     doc.@!(top // arg 0 // value // number);
-  print @@ doc.@(top // arg 0 // value // number) <- `Decimal "4.15";
+  print @@ doc.@(top // arg 0 // value // number) <- `Float_raw "4.15";
   [%expect {|
     3.14
     - 4.15 |}]

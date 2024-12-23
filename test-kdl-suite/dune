@@ -1,0 +1,8 @@
+(executable
+ (name test_kdl_suite)
+ (libraries kdl zarith))
+
+(rule
+ (alias runtest)
+ (action (run ./test_kdl_suite.exe))
+ (deps (source_tree test_cases)))

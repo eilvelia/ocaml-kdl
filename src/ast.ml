@@ -4,7 +4,7 @@ module Num = struct
   type t = [
     | `Int of int
     | `Int_raw of string
-    | `Decimal of string
+    | `Float_raw of string
   ]
 
   (* Note: Float.to_string outputs "inf", "-inf", "nan" for the infinity,
@@ -15,12 +15,12 @@ module Num = struct
   let to_string : [< t ] -> string = function
     | `Int int -> Int.to_string int
     | `Int_raw str
-    | `Decimal str -> str
+    | `Float_raw str -> str
 
   let to_float : [< t ] -> float = function
     | `Int int -> Float.of_int int
     | `Int_raw str
-    | `Decimal str -> float_of_string str
+    | `Float_raw str -> float_of_string str
 
   open struct
     let check_int_bounds =
@@ -72,7 +72,7 @@ module Num = struct
   let to_int : [< t ] -> int option = function
     | `Int int -> Some int
     | `Int_raw str -> int_of_string_opt str
-    | `Decimal str ->
+    | `Float_raw str ->
       match float_of_string_opt str with
       | Some f when Float.is_integer f && check_int_bounds f ->
         Some (Float.to_int f)
@@ -81,7 +81,7 @@ module Num = struct
   let to_int_unsigned : [< t ] -> int option = function
     | `Int int -> if int >= 0 then Some int else None
     | `Int_raw str -> Option.bind (to_unsigned_literal str) int_of_string_opt
-    | `Decimal str ->
+    | `Float_raw str ->
       match float_of_string_opt str with
       | Some f when Float.is_integer f && check_unsigned_int_bounds f ->
         Some (Float.to_int f)
@@ -92,7 +92,7 @@ module Num = struct
       if int > Int32.to_int Int32.max_int then None else Some (Int32.of_int int)
     | `Int int -> Some (Int32.of_int int)
     | `Int_raw str -> Int32.of_string_opt str
-    | `Decimal str ->
+    | `Float_raw str ->
       match float_of_string_opt str with
       | Some f when Float.is_integer f && check_int32_bounds f ->
         Some (Int32.of_float f)
@@ -105,7 +105,7 @@ module Num = struct
       else None
     | `Int int -> if int >= 0 then Some (Int32.of_int int) else None
     | `Int_raw str -> Option.bind (to_unsigned_literal str) Int32.of_string_opt
-    | `Decimal str ->
+    | `Float_raw str ->
       match float_of_string_opt str with
       | Some f when Float.is_integer f && check_unsigned_int32_bounds f ->
         Some (Int32.of_float f)
@@ -114,7 +114,7 @@ module Num = struct
   let to_int64 : [< t ] -> int64 option = function
     | `Int int -> Some (Int64.of_int int)
     | `Int_raw str -> Int64.of_string_opt str
-    | `Decimal str ->
+    | `Float_raw str ->
       (* Note that this can lose accuracy *)
       match float_of_string_opt str with
       | Some f when Float.is_integer f && check_int64_bounds f ->
@@ -124,7 +124,7 @@ module Num = struct
   let to_int64_unsigned : [< t ] -> int64 option = function
     | `Int int -> if int >= 0 then Some (Int64.of_int int) else None
     | `Int_raw str -> Option.bind (to_unsigned_literal str) Int64.of_string_opt
-    | `Decimal str ->
+    | `Float_raw str ->
       match float_of_string_opt str with
       | Some f when Float.is_integer f && check_unsigned_int64_bounds f ->
         Some (Int64.of_float f)
@@ -137,7 +137,7 @@ module Num = struct
       else Some (Nativeint.of_int int)
     | `Int int -> Some (Nativeint.of_int int)
     | `Int_raw str -> Nativeint.of_string_opt str
-    | `Decimal str ->
+    | `Float_raw str ->
       match float_of_string_opt str with
       | Some f when Float.is_integer f && check_nativeint_bounds f ->
         Some (Nativeint.of_float f)
@@ -150,7 +150,7 @@ module Num = struct
       | Some _ | None -> None)
     | `Int int -> if int >= 0 then Some (Nativeint.of_int int) else None
     | `Int_raw str -> Option.bind (to_unsigned_literal str) Nativeint.of_string_opt
-    | `Decimal str ->
+    | `Float_raw str ->
       match float_of_string_opt str with
       | Some f when Float.is_integer f && check_unsigned_nativeint_bounds f ->
         Some (Nativeint.of_float f)
@@ -179,13 +179,13 @@ module Num = struct
     | Some x -> Some (`Int x)
     | None ->
       match float_of_string_opt input with
-      | Some _ -> Some (`Decimal input)
+      | Some _ -> Some (`Float_raw input)
       | None -> None
 
   let of_float : float -> [> t ] = fun x ->
     if Float.is_integer x && check_int_bounds x then
       `Int (Float.to_int x)
-    else `Decimal (Float.to_string x)
+    else `Float_raw (Float.to_string x)
 
   let of_int : int -> [> t ] = fun x -> `Int x
 
@@ -214,16 +214,16 @@ module Num = struct
     | `Int i1, `Int i2 -> Int.equal i1 i2
     (* The string is not necessarily normalized *)
     | `Int_raw s1, `Int_raw s2 -> String.equal s1 s2
-    | `Decimal d1, `Decimal d2 ->
+    | `Float_raw d1, `Float_raw d2 ->
       (match float_of_string_opt d1, float_of_string_opt d2 with
       | Some f1, Some f2 -> Float.equal f1 f2
       | _ -> false)
     | `Int i, `Int_raw s | `Int_raw s, `Int i -> String.equal (Int.to_string i) s
-    | `Int i, `Decimal d | `Decimal d, `Int i ->
+    | `Int i, `Float_raw d | `Float_raw d, `Int i ->
       (match float_of_string_opt d with
       | Some f when Float.is_integer f -> Float.equal (Float.of_int i) f
       | Some _ | None -> false)
-    | `Int_raw ilit, `Decimal d | `Decimal d, `Int_raw ilit ->
+    | `Int_raw ilit, `Float_raw d | `Float_raw d, `Int_raw ilit ->
       (match float_of_string_opt d with
       | Some f when Float.is_integer f -> String.equal (Float.to_string f) ilit
       | Some _ | None -> false)
@@ -292,7 +292,7 @@ let sexp_of_value : [< value ] -> Sexp.t = function
       match num with
       | `Int _ -> "int"
       | `Int_raw _ -> "int-raw"
-      | `Decimal _ -> "decimal" in
+      | `Float_raw _ -> "float-raw" in
     Sexp.List [Atom (Printf.sprintf "number-%s" tag); Atom (Num.to_string num)]
   | `Bool true -> Sexp.List [Atom "bool"; Atom "true"]
   | `Bool false -> Sexp.List [Atom "bool"; Atom "false"]
@@ -335,8 +335,3 @@ let node ?annot name ?(args = []) ?(props = []) children =
 let arg ?(annot : string option) value = annot, value
 
 let prop ?(annot : string option) name value = name, (annot, value)
-
-(* TODO: *)
-(* module Raw = struct
-  type t
-end *)

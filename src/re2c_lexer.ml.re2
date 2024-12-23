@@ -1,0 +1,205 @@
+(* $ make generate-re2c *)
+
+(* no unused variables *)
+[@@@warning "-27"]
+
+(* NOTE: re2c can request a character one position greater than the end of
+   the string ("the sentinel"). In OCaml, strings are always represented with
+   \000 at the end, so to avoid copying, we can use
+   [String.unsafe_get str (String.length str)], which should in fact be safe.
+   The [pos <= String.length str] check is not done here; it is assumed that
+   re2c generates correct code. *)
+let get = String.unsafe_get
+
+let error msg = raise @@ Err.Custom_lexing_error msg
+
+type state = {
+  yyinput : string;
+  yylimit : int;
+  mutable yycursor : int;
+  mutable yyaccept : int;
+  mutable yymarker : int;
+  %{svars format = "\n  mutable @@{tag} : int;"; %}
+  %{stags format = "\n  mutable @@{tag} : int;"; %}
+}
+
+let make_state ?(offset = 0) input = {
+  yyinput = input;
+  yylimit = String.length input;
+  yycursor = offset;
+  yyaccept = 0;
+  yymarker = 0;
+  %{svars format = "\n  @@{tag} = 0;"; %}
+  %{stags format = "\n  @@{tag} = 0;"; %}
+}
+
+%{
+  re2c:encoding:utf8 = 1;
+  re2c:yyfill:enable = 0;
+  re2c:captvars = 1;
+  re2c:indent:string = "  ";
+  re2c:eof = 0;
+
+  whitespace_char =
+      [\u0009] // Character Tabulation U+0009
+    | [\u0020] // Space U+0020
+    | [\u00A0] // No-Break-Space U+00A0
+    | [\u1680] // Ogham Space Mark U+1680
+    | [\u2000] // En Quad	U+2000
+    | [\u2001] // Em Quad U+2001
+    | [\u2002] // En Space U+2002
+    | [\u2003] // Em Space U+2003
+    | [\u2004] // Three-Per-Em Space U+2004
+    | [\u2005] // Four-Per-Em Space U+2005
+    | [\u2006] // Six-Per-Em Space U+2006
+    | [\u2007] // Figure Space U+2007
+    | [\u2008] // Punctuation Space U+2008
+    | [\u2009] // Thin Space U+2009
+    | [\u200A] // Hair Space U+200A
+    | [\u202F] // Narrow No-Break Space U+202F
+    | [\u205F] // Medium Mathematical Space U+205F
+    | [\u3000] // Ideographic Space U+3000
+  ;
+
+  newline_char =
+      [\r]     // CR   Carriage Return U+000D
+    | [\n]     // LF   Line Feed U+000A
+    | [\u0085] // NEL  Next Line U+0085
+    | [\u000B] // VT   Vertical Tab U+000B
+    | [\u000C] // FF   Form Feed U+000C
+    | [\u2028] // LS   Line Separator U+2028
+    | [\u2029] // PS   Paragraph Separator U+2029
+  ;
+
+  newline = "\r\n" | newline_char;
+  ws = whitespace_char+;
+
+  hex_digit = [0-9a-fA-F];
+
+  sign = [+\-];
+
+  disallowed_char =
+      [\x00-\x08\x0E-\x1F]
+    | [\x7F] // Delete
+    | [\u200E-\u200F\u202A-\u202E\u2066-\u2069] // Direction control
+    | [\uFEFF] // BOM/ZWNBSP
+  ;
+
+  nonident_char =
+      [(){}[\]/\\#;=] | "\""
+    | disallowed_char
+    | whitespace_char
+    | newline_char
+  ;
+  identchar = [^] \ nonident_char;
+  startident = identchar \ [0-9];
+%}
+
+%{local
+  re2c:YYFN = ["resolve_escapes;string", "yyrecord;state", "strbuf;Buffer.t"];
+
+  "\\n" { Buffer.add_char strbuf '\n'; resolve_escapes yyrecord strbuf }
+  "\\r" { Buffer.add_char strbuf '\r'; resolve_escapes yyrecord strbuf }
+  "\\t" { Buffer.add_char strbuf '\t'; resolve_escapes yyrecord strbuf }
+  "\\\\" { Buffer.add_char strbuf '\\'; resolve_escapes yyrecord strbuf }
+  "\\\"" { Buffer.add_char strbuf '"'; resolve_escapes yyrecord strbuf }
+  "\\b" { Buffer.add_char strbuf '\b'; resolve_escapes yyrecord strbuf }
+  "\\f" { Buffer.add_char strbuf '\012'; resolve_escapes yyrecord strbuf }
+  "\\s" { Buffer.add_char strbuf ' '; resolve_escapes yyrecord strbuf }
+  "\\u{" (hex_digit+) "}" {
+    let len = yyrecord.yytr0 - yyrecord.yytl0 in
+    if len > 6 then
+      error "Invalid unicode scalar value";
+    let code_str = String.sub yyrecord.yyinput yyrecord.yytl0 len in
+    let code = int_of_string @@ "0x" ^ code_str in
+    if not @@ Uchar.is_valid code then
+      error "Invalid unicode scalar value";
+    Buffer.add_utf_8_uchar strbuf (Uchar.unsafe_of_int code);
+    resolve_escapes yyrecord strbuf
+  }
+  "\\" (!newline | whitespace_char)+ { resolve_escapes yyrecord strbuf }
+  "\\" [^] { error "Invalid escape sequence" }
+  $ { Buffer.contents strbuf }
+  ([^]) {
+    let len = yyrecord.yytr0 - yyrecord.yytl0 in
+    Buffer.add_substring strbuf yyrecord.yyinput yyrecord.yytl0 len;
+    resolve_escapes yyrecord strbuf
+  }
+  * { assert false }
+%}
+
+%{local
+  re2c:YYFN = ["skip_whitespace_line;int", "yyrecord;state"];
+
+  ws { skip_whitespace_line yyrecord }
+  newline { yyrecord.yycursor }
+  $ { yyrecord.yycursor }
+  * { ~-1 }
+%}
+
+%{local
+  re2c:YYFN = ["is_fully_whitespace;bool", "yyrecord;state"];
+
+  ws { is_fully_whitespace yyrecord }
+  $ { true }
+  * { false }
+%}
+
+%{local
+  // Used in pretty-printing
+  re2c:YYFN = ["is_valid_ident;bool", "yyrecord;state"];
+
+  "true" | "false" | "null" | "inf" | "-inf" | "nan" {
+    not (yyrecord.yycursor >= yyrecord.yylimit)
+  }
+  sign? "." [0-9] { false }
+  sign (!startident identchar*)? | (!startident \ sign) identchar* {
+    yyrecord.yycursor >= yyrecord.yylimit
+  }
+  $ { false }
+  * { false }
+%}
+
+%{local
+  // Used in pretty-printing
+  re2c:YYFN = ["escape_string;string", "yyrecord;state", "strbuf;Buffer.t"];
+
+  [\n] { Buffer.add_string strbuf "\\n"; escape_string yyrecord strbuf }
+  [\r] { Buffer.add_string strbuf "\\r"; escape_string yyrecord strbuf }
+  [\t] { Buffer.add_string strbuf "\\t"; escape_string yyrecord strbuf }
+  [\\] { Buffer.add_string strbuf "\\\\"; escape_string yyrecord strbuf }
+  "\"" { Buffer.add_string strbuf "\\\""; escape_string yyrecord strbuf }
+  [\b] { Buffer.add_string strbuf "\\b"; escape_string yyrecord strbuf }
+  [\f] { Buffer.add_string strbuf "\\f"; escape_string yyrecord strbuf }
+  (disallowed_char) {
+    let udecode = String.get_utf_8_uchar yyrecord.yyinput yyrecord.yytl0 in
+    if not (Uchar.utf_decode_is_valid udecode) then
+      failwith "Malformed UTF-8";
+    let code = Uchar.to_int (Uchar.utf_decode_uchar udecode) in
+    Buffer.add_string strbuf (Printf.sprintf "\\u{%X}" code);
+    escape_string yyrecord strbuf
+  }
+  $ { Buffer.contents strbuf }
+  ([^]) {
+    let len = yyrecord.yytr0 - yyrecord.yytl0 in
+    Buffer.add_substring strbuf yyrecord.yyinput yyrecord.yytl0 len;
+    escape_string yyrecord strbuf
+  }
+  * { assert false }
+%}
+
+let resolve_escapes str = resolve_escapes (make_state str) (Buffer.create 32)
+
+let skip_whitespace_line ?(offset = 0) str =
+  skip_whitespace_line (make_state ~offset str)
+
+let is_fully_whitespace = function
+  | "" -> true
+  | str -> is_fully_whitespace (make_state str)
+
+let is_valid_ident str = is_valid_ident (make_state str)
+[@@inline]
+
+let escape_string = function
+  | "" as empty -> empty
+  | str -> escape_string (make_state str) (Buffer.create 32)

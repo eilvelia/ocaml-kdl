@@ -17,7 +17,7 @@ let zero_pos = {
   pos_cnum = 0;
 }
 
-let show_pos p =
+let pos_to_string p =
   let file, line, column = get_pos_info p in
   Printf.sprintf "%s:%d:%d" file line column
 
@@ -29,7 +29,7 @@ type t = pos * pos
 
 let make loc_start loc_end = loc_start, loc_end
 
-let show (loc_start, loc_end) =
+let to_string (loc_start, loc_end) =
   let (fname, lstart, cstart) = get_pos_info loc_start in
   let (_, lend, cend) = get_pos_info loc_end in
   Printf.sprintf "%s:%d:%d-%d:%d" fname lstart cstart lend cend

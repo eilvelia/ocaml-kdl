@@ -1,71 +1,78 @@
 opam-version: "2.0"
 name: "kdl"
 version: "0.1.0"
-synopsis: "OCaml implementation of the KDL document laguage"
+synopsis: "OCaml implementation of the KDL Document Language"
 maintainer: "eilvelia <hi@eilvelia.cat>"
 authors: "eilvelia <hi@eilvelia.cat>"
-license: "BlueOak-1.0.0"
-tags: [ "configuration-language" "data-serialization-format"]
+license: "MPL-2.0"
 homepage: "https://github.com/eilvelia/ocaml-kdl"
 bug-reports: "https://github.com/eilvelia/ocaml-kdl/issues"
 depends: [
   "astring" {= "0.8.5" & with-doc}
-  "base" {= "v0.16.3" & with-test}
+  "base" {= "v0.17.1" & with-test}
   "base-bigarray" {= "base"}
+  "base-domains" {= "base"}
+  "base-nnp" {= "base"}
   "base-threads" {= "base"}
   "base-unix" {= "base"}
   "camlp-streams" {= "5.0.1" & with-doc}
-  "cmdliner" {= "1.2.0" & with-doc}
-  "conf-bash" {= "1" & with-test}
-  "cppo" {= "1.6.9" & with-doc}
+  "cmdliner" {= "1.3.0" & with-doc}
+  "conf-gmp" {= "4" & with-test}
+  "conf-pkg-config" {= "3" & with-test}
+  "cppo" {= "1.8.0" & with-doc}
   "crunch" {= "3.3.1" & with-doc}
   "csexp" {= "1.5.2" & with-test}
-  "dune" {= "3.14.2"}
-  "dune-configurator" {= "3.14.2" & with-test}
+  "dune" {= "3.17.0"}
+  "dune-configurator" {= "3.17.0" & with-test}
   "fmt" {= "0.9.0" & with-doc}
   "fpath" {= "0.7.3" & with-doc}
   "gen" {= "1.1"}
-  "jane-street-headers" {= "v0.16.0" & with-test}
-  "jst-config" {= "v0.16.0" & with-test}
-  "menhir" {= "20231231"}
-  "menhirCST" {= "20231231"}
-  "menhirLib" {= "20231231"}
-  "menhirSdk" {= "20231231"}
-  "ocaml" {= "4.14.1"}
-  "ocaml-base-compiler" {= "4.14.1"}
-  "ocaml-compiler-libs" {= "v0.12.4"}
-  "ocaml-config" {= "2"}
+  "host-arch-x86_64" {= "1"}
+  "host-system-other" {= "1"}
+  "jane-street-headers" {= "v0.17.0" & with-test}
+  "jst-config" {= "v0.17.0" & with-test}
+  "menhir" {= "20240715"}
+  "menhirCST" {= "20240715"}
+  "menhirLib" {= "20240715"}
+  "menhirSdk" {= "20240715"}
+  "ocaml" {= "5.2.1"}
+  "ocaml-base-compiler" {= "5.2.1"}
+  "ocaml-compiler-libs" {= "v0.17.0"}
+  "ocaml-config" {= "3"}
   "ocaml-options-vanilla" {= "1"}
-  "ocamlbuild" {= "0.14.3" & with-doc}
-  "ocamlfind" {= "1.9.6" & with-doc}
-  "odoc" {= "2.4.1" & with-doc}
-  "odoc-parser" {= "2.4.1" & with-doc}
-  "ppx_assert" {= "v0.16.0" & with-test}
-  "ppx_base" {= "v0.16.0" & with-test}
-  "ppx_cold" {= "v0.16.0" & with-test}
-  "ppx_compare" {= "v0.16.0" & with-test}
+  "ocaml_intrinsics_kernel" {= "v0.17.1" & with-test}
+  "ocamlbuild" {= "0.15.0" & with-doc}
+  "ocamlfind" {= "1.9.6" & with-test}
+  "odoc" {= "2.4.4" & with-doc}
+  "odoc-parser" {= "2.4.4" & with-doc}
+  "ppx_assert" {= "v0.17.0" & with-test}
+  "ppx_base" {= "v0.17.0" & with-test}
+  "ppx_cold" {= "v0.17.0" & with-test}
+  "ppx_compare" {= "v0.17.0" & with-test}
   "ppx_derivers" {= "1.2.1"}
-  "ppx_enumerate" {= "v0.16.0" & with-test}
-  "ppx_expect" {= "v0.16.0" & with-test}
-  "ppx_globalize" {= "v0.16.0" & with-test}
-  "ppx_hash" {= "v0.16.0" & with-test}
-  "ppx_here" {= "v0.16.0" & with-test}
-  "ppx_inline_test" {= "v0.16.1" & with-test}
-  "ppx_optcomp" {= "v0.16.0" & with-test}
-  "ppx_sexp_conv" {= "v0.16.0" & with-test}
-  "ppxlib" {= "0.32.0"}
-  "ptime" {= "1.1.0" & with-doc}
-  "re" {= "1.11.0" & with-test}
+  "ppx_enumerate" {= "v0.17.0" & with-test}
+  "ppx_expect" {= "v0.17.2" & with-test}
+  "ppx_globalize" {= "v0.17.0" & with-test}
+  "ppx_hash" {= "v0.17.0" & with-test}
+  "ppx_here" {= "v0.17.0" & with-test}
+  "ppx_inline_test" {= "v0.17.0" & with-test}
+  "ppx_optcomp" {= "v0.17.0" & with-test}
+  "ppx_sexp_conv" {= "v0.17.0" & with-test}
+  "ppxlib" {= "0.33.0"}
+  "ppxlib_jane" {= "v0.17.0" & with-test}
+  "ptime" {= "1.2.0" & with-doc}
+  "re" {= "1.12.0" & with-doc}
   "result" {= "1.5" & with-doc}
-  "sedlex" {= "3.2"}
+  "sedlex" {= "3.3"}
   "seq" {= "base"}
-  "sexplib0" {= "v0.16.0"}
-  "stdio" {= "v0.16.0" & with-test}
+  "sexplib0" {= "v0.17.0"}
+  "stdio" {= "v0.17.0" & with-test}
   "stdlib-shims" {= "0.3.0"}
-  "time_now" {= "v0.16.0" & with-test}
+  "time_now" {= "v0.17.0" & with-test}
   "topkg" {= "1.0.7" & with-doc}
   "tyxml" {= "4.6.0" & with-doc}
   "uutf" {= "1.0.3" & with-doc}
+  "zarith" {= "1.14" & with-test}
 ]
 build: [
   "dune"
@@ -78,3 +85,4 @@ build: [
   "@doc" {with-doc}
 ]
 dev-repo: "git+https://github.com/eilvelia/ocaml-kdl.git"
+tags: ["data-serialization-format" "configuration-format"]

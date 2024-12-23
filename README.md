@@ -1,11 +1,13 @@
-# ocaml-kdl &nbsp; [![CI][ci-badge]][ci-page]
+# ocaml-kdl &nbsp; [![CI][ci-badge]][ci-page] ![KDL][kdl-version-badge]
 
 [ci-badge]: https://github.com/eilvelia/ocaml-kdl/actions/workflows/ci.yml/badge.svg
 [ci-page]: https://github.com/eilvelia/ocaml-kdl/actions/workflows/ci.yml
 
-An OCaml implementation of the [KDL][] Document Language 2.0.0.
+[kdl-version-badge]: https://img.shields.io/badge/kdl-2.0.0-pink
 
-[KDL]: https://github.com/kdl-org/kdl
+OCaml implementation of the [KDL Document Language][kdl] v2.
+
+[kdl]: https://kdl.dev/
 
 ```console
 $ opam install kdl

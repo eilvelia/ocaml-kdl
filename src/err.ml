@@ -1,13 +1,11 @@
-exception CustomParsingError of string * Loc.t
-exception CustomLexingError of string
-
-(* TODO: Create a sum type instead of strings? *)
+exception Custom_parsing_error of string * Loc.t
+exception Custom_lexing_error of string
 
 type error_loc = Loc.t
 
 type error = string * error_loc
 
-let show_error (msg, loc) =
-  Printf.sprintf "%s: %s" (Loc.show loc) msg
+let pp_error fmt (msg, loc : error) =
+  Format.fprintf fmt "%s: %s" (Loc.to_string loc) msg
 
 exception Parse_error of error

@@ -1,12 +1,12 @@
 %{
 open Ast
 
-let[@inline] cons_if_some x xs =
+let cons_if_some x xs =
   match x with
   | None -> xs
   | Some x -> x :: xs
 
-let error loc msg = raise @@ Err.CustomParsingError (msg, loc)
+let error loc msg = raise @@ Err.Custom_parsing_error (msg, loc)
 %}
 
 %token NEWLINE
@@ -17,30 +17,16 @@ let error loc msg = raise @@ Err.CustomParsingError (msg, loc)
 %token <string> RAW_STRING
 %token <string> INTEGER
 %token <string> FLOAT
-%token TRUE
-%token FALSE
-%token NULL
-%token DISABLE "/-"
+%token TRUE "#true"
+%token FALSE "#false"
+%token NULL "#null"
+%token SLASHDASH "/-"
 %token LPAREN "("
 %token RPAREN ")"
 %token LBRACE "{"
 %token RBRACE "}"
-%token EQ
+%token EQ "="
 %token EOF
-
-// The following tokens are used in KQL only
-// %token LBRACKET "["
-// %token RBRACKET "]"
-// %token GT ">"
-// %token GTE ">="
-// %token LT "<"
-// %token LTE "<="
-// %token PLUS "+"
-// %token TILDE "~"
-// %token PARALLEL "||"
-// %token CARET_EQ "^="
-// %token DOLLAR_EQ "$="
-// %token STAR_EQ "*="
 
 %start <Ast.t> document
 %%
@@ -50,15 +36,19 @@ document: BOM? xs=nodes EOF { xs } ;
 %inline any_string:
   | id=IDENT_STRING {
     match id with
-    | "true" | "false" | "null" | "inf" | "-inf" | "nan" ->
+    | "inf" | "-inf" | "nan" | "true" | "false" | "null" ->
       error $loc(id) @@
-        Printf.sprintf "A keyword must be quoted. Did you mean \"%s\" or #%s?"
-          id id
+        Printf.sprintf
+          "%s is not a valid identifier. Did you mean \"%s\" (quoted) or #%s?"
+          id id id
     | _ -> id
   }
   | str=QUOTED_STRING { str }
   | rstr=RAW_STRING { rstr }
 ;
+
+(* Used in error reporting *)
+%inline keyword: x="#true" { x } | x="#false" { x } | x="#null" { x } ;
 
 nodes:
   | NEWLINE* { [] }
@@ -75,58 +65,83 @@ children_nodes:
 ;
 
 node:
-  | "/-" type_annot? any_string entity*
+  | "/-" NEWLINE* type_annot? any_string entity*
     { None }
   | annot=type_annot? name=any_string entities=entity* {
-    let known_props : (string, prop) Hashtbl.t = Hashtbl.create 4 in
-    let f (args, props, children) entity =
-      match entity, children with
-      | `Disabled, _ -> args, props, children
-      | `Children (_, loc), Some _ ->
-        error loc "A children block must be defined only once"
-      | `Children c, None -> args, props, Some c
-      | (`Prop _ | `Arg _), Some (_, loc) ->
-        error loc "A children block must be the last element of a node"
-      | `Arg a, _ -> a :: args, props, children
-      (* This is not optimal, but should be fine for most cases.
-         Every prop is checked against the known_props hash table, this
-         operates in O(1) on average. If the prop has been already defined,
-         it is removed from the list in O(n) time. It is assumed that
-         redefinitions of properties should be rare. *)
-      | `Prop (name, _ as p), _ when Hashtbl.mem known_props name ->
-        args, p :: List.filter (fun (n, _) -> n <> name) props, children
-      | `Prop (name, _ as p), _ ->
-        Hashtbl.add known_props name p;
-        args, p :: props, children
+    (* Require at least one whitespace between the node name and 1st entity *)
+    begin match entities with
+    | [] -> ()
+    | (entity1_loc, _) :: _ ->
+      let start_pos = $endpos(name) and end_pos = fst entity1_loc in
+      if Lexing.(start_pos.pos_cnum >= end_pos.pos_cnum) then
+        error (start_pos, end_pos) "Expected a whitespace delimiter";
+    end;
+    (* Require at least one whitespace between entities *)
+    let rec check_whitespace = function
+      | [] | _ :: [] -> ()
+      | (entity1_loc, _) :: ((entity2_loc, _) :: _ as rest) ->
+        let start_pos = snd entity1_loc and end_pos = fst entity2_loc in
+        if Lexing.(start_pos.pos_cnum >= end_pos.pos_cnum) then
+          error (start_pos, end_pos) "Expected a whitespace delimiter";
+        check_whitespace rest
     in
-    let args, props, children_opt = List.fold_left f ([], [], None) entities in
-    let children = match children_opt with None -> [] | Some (xs, _loc) -> xs in
-    let args = List.rev args in
-    let props = List.rev props in
+    check_whitespace entities;
+    let known_props : (string, prop) Hashtbl.t = Hashtbl.create 4 in
+    let args = ref [] and props = ref [] and children = ref [] in
+    let meet_children = ref false in
+    let meet_slashdashed_children = ref false in
+    List.iter (fun entity ->
+      let loc, entity = entity in
+      match entity, !meet_children, !meet_slashdashed_children with
+      | `Slashdashed_prop_or_arg, false, false -> ()
+      | `Slashdashed_children, _, _ -> meet_slashdashed_children := true;
+      | (`Prop_or_arg _ | `Slashdashed_prop_or_arg), true, _
+      | (`Prop_or_arg _ | `Slashdashed_prop_or_arg), _, true ->
+        error loc "A property or argument cannot be defined after a children block"
+      | `Children _, true, _ ->
+        error loc "A children block cannot be defined twice"
+      | `Children c, false, _ ->
+        meet_children := true;
+        children := c
+      | `Prop_or_arg x, false, false ->
+        match x with
+        | `Arg a ->
+          args := a :: !args
+        (* This is not optimal, but should be fine for most cases.
+           Every prop is checked against the known_props hash table, this
+           operates in O(1) on average. If the prop has been already defined,
+           it is removed from the list in O(n) time. It is assumed that
+           redefinitions of properties should be rare. *)
+        | `Prop (name, _ as p) when Hashtbl.mem known_props name ->
+          props := p :: List.filter (fun (n, _) -> n <> name) !props
+        | `Prop (name, _ as p) ->
+          Hashtbl.add known_props name p;
+          props := p :: !props
+    ) entities;
+    let args = List.rev !args and props = List.rev !props in
+    let children = !children in
     Some { name; annot; args; props; children }
   }
-  | type_annot? _x=TRUE error { error $loc(_x) "A keyword is not a valid node name" }
-  | type_annot? _x=FALSE error { error $loc(_x) "A keyword is not a valid node name" }
-  | type_annot? _x=NULL error { error $loc(_x) "A keyword is not a valid node name" }
+  | type_annot? _x=keyword error { error $loc(_x) "A keyword is not a valid node name" }
   | type_annot? _x=INTEGER error { error $loc(_x) "A number is not a valid node name" }
   | type_annot? _x=FLOAT error { error $loc(_x) "A number is not a valid node name" }
   | type_annot _x=error { error $loc(_x) "Expected a node name" }
-  | "/-" _x=error { error $loc(_x) "Expected a node after a '/-'"}
+  | "/-" NEWLINE* _x=error { error $loc(_x) "Expected a node after '/-'"}
   | _x=")" error { error $loc(_x) "Unexpected token ')'" }
-  | _x=EQ error { error $loc(_x) "Unexpected token '='" }
+  | _x="=" error { error $loc(_x) "Unexpected token '='" }
 ;
 
 entity:
-  | "/-" prop_or_arg { `Disabled }
-  | "/-" children { `Disabled }
-  | x=prop_or_arg { x }
-  | x=children { `Children (x, $sloc) }
-  | "/-" _x="}" error { error $loc(_x) "Unexpected token '}'" }
+  | "/-" NEWLINE* prop_or_arg { $sloc, `Slashdashed_prop_or_arg }
+  | "/-" NEWLINE* children { $sloc, `Slashdashed_children }
+  | x=prop_or_arg { $sloc, `Prop_or_arg x }
+  | x=children { $sloc, `Children x }
+  | "/-" NEWLINE* _x="}" error { error $loc(_x) "Unexpected token '}'" }
 ;
 
 prop_or_arg:
   (* (requires lookahead to the = token to differentiate from string values) *)
-  | key=any_string _eq=EQ aval=annot_value { `Prop (key, aval) }
+  | key=any_string "=" aval=annot_value { `Prop (key, aval) }
   | aval=annot_value { `Arg aval }
 ;
 
@@ -148,19 +163,17 @@ value:
     | Some int -> `Int int
     | None -> `Int_raw value
   }
-  | value=FLOAT { `Decimal value }
-  | TRUE { `Bool true }
-  | FALSE { `Bool false }
-  | NULL { `Null }
+  | value=FLOAT { `Float_raw value }
+  | "#true" { `Bool true }
+  | "#false" { `Bool false }
+  | "#null" { `Null }
   | error { error $sloc "Expected a value" }
 ;
 
 type_annot:
   | "(" typ=any_string ")" { typ }
   | "(" any_string _x=error { error $loc(_x) "Expected ')'" }
-  | "(" _x=TRUE error { error $loc(_x) "A keyword is not a valid type annotation name" }
-  | "(" _x=FALSE error { error $loc(_x) "A keyword is not a valid type annotation name" }
-  | "(" _x=NULL error { error $loc(_x) "A keyword is not a valid type annotation name" }
+  | "(" _x=keyword error { error $loc(_x) "A keyword is not a valid type annotation name" }
   | "(" _x=INTEGER error { error $loc(_x) "A number is not a valid type annotation name" }
   | "(" _x=FLOAT error { error $loc(_x) "A number is not a valid type annotation name" }
   | "(" _x=error { error $loc(_x) "Expected a type annotation name" }

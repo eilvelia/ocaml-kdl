@@ -19,6 +19,23 @@ type typed_value = [
   | `Unannotated of value
 ]
 
+let pp_typed_value fmt : [< typed_value ] -> unit = function
+  | `I8 x -> Format.fprintf fmt "`I8 %d" x
+  | `I16 x -> Format.fprintf fmt "`I16 %d" x
+  | `I32 x -> Format.fprintf fmt "`I32 %ld" x
+  | `I64 x -> Format.fprintf fmt "`I64 %Ld" x
+  | `U8 x -> Format.fprintf fmt "`U8 %d" x
+  | `U16 x -> Format.fprintf fmt "`U16 %d" x
+  | `U32 x -> Format.fprintf fmt "`U32 %ld" x
+  | `U64 x -> Format.fprintf fmt "`U64 %Ld" x
+  | `Isize x -> Format.fprintf fmt "`Isize %nd" x
+  | `Usize x -> Format.fprintf fmt "`Usize %nd" x
+  | `F32 x -> Format.fprintf fmt "`F32 %f" x
+  | `F64 x -> Format.fprintf fmt "`F64 %f" x
+  | `Base64 x -> Format.fprintf fmt "`Base64 \"%s\"" (String.escaped (Bytes.to_string x))
+  | `Other (annot, _) -> Format.fprintf fmt "`Other (%s, _)" annot
+  | `Unannotated _ -> Format.fprintf fmt "`Unannotated"
+
 exception Invalid_annotation of string
 
 let interpret : annot_value -> [> typed_value] =

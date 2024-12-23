@@ -13,12 +13,10 @@ external bytes_unsafe_set_int8 : bytes -> int -> int -> unit = "%bytes_unsafe_se
 
 (* Returns length of the string ignoring arbitrary number of '=' characters
    at the end of the string *)
-let count_len str =
+let[@inline] count_len str =
   (* More efficient than the tail-recursive version *)
   let i = ref (String.length str - 1) in
-  while !i > -1 && str.%[!i] = '=' do
-    decr i
-  done;
+  while !i >= 0 && str.%[!i] = '=' do decr i done;
   !i + 1
 
 exception Error of string
@@ -69,4 +67,5 @@ let decode input =
     end;
     i := !i + 4
   done;
+  assert (!j = Bytes.length out);
   out
