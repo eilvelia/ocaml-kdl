@@ -1,9 +1,6 @@
 (* $ make generate-re2c *)
 (* vim: set filetype=ocaml: *)
 
-(* no unused variables *)
-[@@@warning "-27"]
-
 (* NOTE: re2c can request a character one position greater than the end of
    the string ("the sentinel"). In OCaml, strings are always represented with
    \000 at the end, so to avoid copying, we can use
@@ -34,10 +31,14 @@ let make_state ?(offset = 0) input = {
   %{stags format = "\n  @@{tag} = 0;"; %}
 }
 
+(* no unused variables *)
+[@@@warning "-27"]
+
 %{
   re2c:encoding:utf8 = 1;
   re2c:yyfill:enable = 0;
   re2c:captvars = 1;
+  re2c:invert-captures = 1;
   re2c:indent:string = "  ";
   re2c:eof = 0;
 
@@ -107,7 +108,7 @@ let make_state ?(offset = 0) input = {
   "\\b" { Buffer.add_char strbuf '\b'; resolve_escapes yyrecord strbuf }
   "\\f" { Buffer.add_char strbuf '\012'; resolve_escapes yyrecord strbuf }
   "\\s" { Buffer.add_char strbuf ' '; resolve_escapes yyrecord strbuf }
-  "\\u{" (hex_digit+) "}" {
+  "\\u{" (!hex_digit+) "}" {
     let len = yyrecord.yytr0 - yyrecord.yytl0 in
     if len > 6 then
       error "Invalid unicode scalar value";
@@ -118,10 +119,10 @@ let make_state ?(offset = 0) input = {
     Buffer.add_utf_8_uchar strbuf (Uchar.unsafe_of_int code);
     resolve_escapes yyrecord strbuf
   }
-  "\\" (!newline | whitespace_char)+ { resolve_escapes yyrecord strbuf }
+  "\\" (newline | whitespace_char)+ { resolve_escapes yyrecord strbuf }
   "\\" [^] { error "Invalid escape sequence" }
   $ { Buffer.contents strbuf }
-  ([^]) {
+  (![^]) {
     let len = yyrecord.yytr0 - yyrecord.yytl0 in
     Buffer.add_substring strbuf yyrecord.yyinput yyrecord.yytl0 len;
     resolve_escapes yyrecord strbuf
@@ -154,7 +155,7 @@ let make_state ?(offset = 0) input = {
     not (yyrecord.yycursor >= yyrecord.yylimit)
   }
   sign? "." [0-9] { false }
-  sign (!startident identchar*)? | (!startident \ sign) identchar* {
+  sign (startident identchar*)? | (startident \ sign) identchar* {
     yyrecord.yycursor >= yyrecord.yylimit
   }
   $ { false }
@@ -172,7 +173,7 @@ let make_state ?(offset = 0) input = {
   "\"" { Buffer.add_string strbuf "\\\""; escape_string yyrecord strbuf }
   [\b] { Buffer.add_string strbuf "\\b"; escape_string yyrecord strbuf }
   [\f] { Buffer.add_string strbuf "\\f"; escape_string yyrecord strbuf }
-  (disallowed_char) {
+  (!disallowed_char) {
     let udecode = String.get_utf_8_uchar yyrecord.yyinput yyrecord.yytl0 in
     if not (Uchar.utf_decode_is_valid udecode) then
       failwith "Malformed UTF-8";
@@ -181,7 +182,7 @@ let make_state ?(offset = 0) input = {
     escape_string yyrecord strbuf
   }
   $ { Buffer.contents strbuf }
-  ([^]) {
+  (![^]) {
     let len = yyrecord.yytr0 - yyrecord.yytl0 in
     Buffer.add_substring strbuf yyrecord.yyinput yyrecord.yytl0 len;
     escape_string yyrecord strbuf

@@ -2,9 +2,6 @@
 (* $ make generate-re2c *)
 (* vim: set filetype=ocaml: *)
 
-(* no unused variables *)
-[@@@warning "-27"]
-
 (* NOTE: re2c can request a character one position greater than the end of
    the string ("the sentinel"). In OCaml, strings are always represented with
    \000 at the end, so to avoid copying, we can use
@@ -23,9 +20,7 @@ type state = {
   mutable yymarker : int;
   
   mutable yytl0 : int;
-  mutable yytl1 : int;
   mutable yytr0 : int;
-  mutable yytr1 : int;
   
   mutable yyt1 : int;
 }
@@ -38,12 +33,13 @@ let make_state ?(offset = 0) input = {
   yymarker = 0;
   
   yytl0 = 0;
-  yytl1 = 0;
   yytr0 = 0;
-  yytr1 = 0;
   
   yyt1 = 0;
 }
+
+(* no unused variables *)
+[@@@warning "-27"]
 
 
 
@@ -98,9 +94,7 @@ and yy1 (yyrecord : state) (strbuf : Buffer.t) : string =
 
 and yy2 (yyrecord : state) (strbuf : Buffer.t) : string =
   yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytl1 <- yyrecord.yyt1;
   yyrecord.yytr0 <- yyrecord.yycursor;
-  yyrecord.yytr1 <- yyrecord.yytr0;
   
     let len = yyrecord.yytr0 - yyrecord.yytl0 in
     Buffer.add_substring strbuf yyrecord.yyinput yyrecord.yytl0 len;
@@ -259,8 +253,6 @@ and yy12 (yyrecord : state) (strbuf : Buffer.t) : string =
   (yy13 [@tailcall]) yyrecord strbuf
 
 and yy13 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   error "Invalid escape sequence"
 
 and yy14 (yyrecord : state) (strbuf : Buffer.t) : string =
@@ -287,56 +279,30 @@ and yy14 (yyrecord : state) (strbuf : Buffer.t) : string =
     | _ -> (yy15 [@tailcall]) yyrecord strbuf
 
 and yy15 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   resolve_escapes yyrecord strbuf
 
 and yy16 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 2;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_char strbuf '"'; resolve_escapes yyrecord strbuf
 
 and yy17 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 2;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_char strbuf '\\'; resolve_escapes yyrecord strbuf
 
 and yy18 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 2;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_char strbuf '\b'; resolve_escapes yyrecord strbuf
 
 and yy19 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 2;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_char strbuf '\012'; resolve_escapes yyrecord strbuf
 
 and yy20 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 2;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_char strbuf '\n'; resolve_escapes yyrecord strbuf
 
 and yy21 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 2;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_char strbuf '\r'; resolve_escapes yyrecord strbuf
 
 and yy22 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 2;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_char strbuf ' '; resolve_escapes yyrecord strbuf
 
 and yy23 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 2;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_char strbuf '\t'; resolve_escapes yyrecord strbuf
 
 and yy24 (yyrecord : state) (strbuf : Buffer.t) : string =
@@ -597,12 +563,9 @@ and yy49 (yyrecord : state) (strbuf : Buffer.t) : string =
     | _ -> (yy26 [@tailcall]) yyrecord strbuf
 
 and yy50 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl1 <- yyrecord.yyt1;
   yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 3;
   yyrecord.yytr0 <- yyrecord.yycursor;
-  yyrecord.yytr1 <- yyrecord.yycursor;
-  yyrecord.yytr1 <- yyrecord.yytr1 - 1;
+  yyrecord.yytr0 <- yyrecord.yytr0 - 1;
   
     let len = yyrecord.yytr0 - yyrecord.yytl0 in
     if len > 6 then
@@ -629,31 +592,24 @@ let rec yy52 (yyrecord : state) : int =
   match yych with
     | '\t'
     | ' ' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy55 [@tailcall]) yyrecord
     | '\n'..'\x0C' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy57 [@tailcall]) yyrecord
     | '\r' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy59 [@tailcall]) yyrecord
     | '\xC2' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy60 [@tailcall]) yyrecord
     | '\xE1' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy61 [@tailcall]) yyrecord
     | '\xE2' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy62 [@tailcall]) yyrecord
     | '\xE3' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy63 [@tailcall]) yyrecord
     | _ ->
@@ -694,16 +650,12 @@ and yy55 (yyrecord : state) : int =
     | _ -> (yy56 [@tailcall]) yyrecord
 
 and yy56 (yyrecord : state) : int =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   skip_whitespace_line yyrecord
 
 and yy57 (yyrecord : state) : int =
   (yy58 [@tailcall]) yyrecord
 
 and yy58 (yyrecord : state) : int =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   yyrecord.yycursor
 
 and yy59 (yyrecord : state) : int =
@@ -849,23 +801,18 @@ let rec yy74 (yyrecord : state) : bool =
   match yych with
     | '\t'
     | ' ' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy77 [@tailcall]) yyrecord
     | '\xC2' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy79 [@tailcall]) yyrecord
     | '\xE1' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy80 [@tailcall]) yyrecord
     | '\xE2' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy81 [@tailcall]) yyrecord
     | '\xE3' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy82 [@tailcall]) yyrecord
     | _ ->
@@ -906,8 +853,6 @@ and yy77 (yyrecord : state) : bool =
     | _ -> (yy78 [@tailcall]) yyrecord
 
 and yy78 (yyrecord : state) : bool =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   is_fully_whitespace yyrecord
 
 and yy79 (yyrecord : state) : bool =
@@ -1042,79 +987,60 @@ let rec yy92 (yyrecord : state) : bool =
     | 'u'..'z'
     | '|'
     | '~' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy95 [@tailcall]) yyrecord
     | '+' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy98 [@tailcall]) yyrecord
     | '-' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy99 [@tailcall]) yyrecord
     | '.' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy100 [@tailcall]) yyrecord
     | 'f' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy101 [@tailcall]) yyrecord
     | 'i' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy102 [@tailcall]) yyrecord
     | 'n' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy103 [@tailcall]) yyrecord
     | 't' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy104 [@tailcall]) yyrecord
     | '\xC2' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy105 [@tailcall]) yyrecord
     | '\xC3'..'\xDF' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy106 [@tailcall]) yyrecord
     | '\xE0' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy107 [@tailcall]) yyrecord
     | '\xE1' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy108 [@tailcall]) yyrecord
     | '\xE2' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy109 [@tailcall]) yyrecord
     | '\xE3' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy110 [@tailcall]) yyrecord
     | '\xE4'..'\xEE' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy111 [@tailcall]) yyrecord
     | '\xEF' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy112 [@tailcall]) yyrecord
     | '\xF0' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy113 [@tailcall]) yyrecord
     | '\xF1'..'\xF3' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy114 [@tailcall]) yyrecord
     | '\xF4' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
       yyrecord.yycursor <- yyrecord.yycursor + 1;
       (yy115 [@tailcall]) yyrecord
     | _ ->
@@ -1186,8 +1112,6 @@ and yy96 (yyrecord : state) (yych : char) : bool =
     | _ -> (yy97 [@tailcall]) yyrecord
 
 and yy97 (yyrecord : state) : bool =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   
     yyrecord.yycursor >= yyrecord.yylimit
 
@@ -1535,8 +1459,6 @@ and yy128 (yyrecord : state) : bool =
     | _ -> (yy129 [@tailcall]) yyrecord
 
 and yy129 (yyrecord : state) : bool =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   false
 
 and yy130 (yyrecord : state) : bool =
@@ -1659,8 +1581,6 @@ and yy140 (yyrecord : state) : bool =
     | _ -> (yy141 [@tailcall]) yyrecord
 
 and yy141 (yyrecord : state) : bool =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   
     not (yyrecord.yycursor >= yyrecord.yylimit)
 
@@ -1777,9 +1697,7 @@ let rec yy145 (yyrecord : state) (strbuf : Buffer.t) : string =
 
 and yy146 (yyrecord : state) (strbuf : Buffer.t) : string =
   yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytl1 <- yyrecord.yyt1;
   yyrecord.yytr0 <- yyrecord.yycursor;
-  yyrecord.yytr1 <- yyrecord.yytr0;
   
     let udecode = String.get_utf_8_uchar yyrecord.yyinput yyrecord.yytl0 in
     if not (Uchar.utf_decode_is_valid udecode) then
@@ -1790,28 +1708,17 @@ and yy146 (yyrecord : state) (strbuf : Buffer.t) : string =
 
 
 and yy147 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_string strbuf "\\b"; escape_string yyrecord strbuf
 
 and yy148 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_string strbuf "\\t"; escape_string yyrecord strbuf
 
 and yy149 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_string strbuf "\\n"; escape_string yyrecord strbuf
 
 and yy150 (yyrecord : state) (strbuf : Buffer.t) : string =
   yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytl1 <- yyrecord.yyt1;
   yyrecord.yytr0 <- yyrecord.yycursor;
-  yyrecord.yytr1 <- yyrecord.yytr0;
   
     let len = yyrecord.yytr0 - yyrecord.yytl0 in
     Buffer.add_substring strbuf yyrecord.yyinput yyrecord.yytl0 len;
@@ -1819,27 +1726,15 @@ and yy150 (yyrecord : state) (strbuf : Buffer.t) : string =
 
 
 and yy151 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_string strbuf "\\f"; escape_string yyrecord strbuf
 
 and yy152 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_string strbuf "\\r"; escape_string yyrecord strbuf
 
 and yy153 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_string strbuf "\\\""; escape_string yyrecord strbuf
 
 and yy154 (yyrecord : state) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yycursor;
-  yyrecord.yytl0 <- yyrecord.yytl0 - 1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
   Buffer.add_string strbuf "\\\\"; escape_string yyrecord strbuf
 
 and yy155 (yyrecord : state) (strbuf : Buffer.t) : string =
