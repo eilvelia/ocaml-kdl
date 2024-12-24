@@ -151,6 +151,8 @@ let arg n = {
     | None -> None)
 }
 
+let first_arg = arg 0
+
 let prop key = {
   get = (fun node -> List.assoc_opt key node.props);
   set = (fun v' node ->

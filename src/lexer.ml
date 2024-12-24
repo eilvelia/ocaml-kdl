@@ -254,7 +254,7 @@ let rec string strbuf lexbuf =
   | '"' ->
     QUOTED_STRING (Buffer.contents strbuf)
   | disallowed_char -> error "Illegal character"
-  | eof -> error "Unterminated multiline string"
+  | eof -> error "Unterminated string"
   | any ->
     Buffer.add_string strbuf (Sedlexing.Utf8.lexeme lexbuf);
     string strbuf lexbuf

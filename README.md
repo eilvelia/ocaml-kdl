@@ -83,7 +83,7 @@ using `//` or `|--`:
 
 ```ocaml
 # let open Kdl.L in
-  kdl.@(top // child "section" // child_nth 1 // arg 0 // string_value)
+  kdl.@(top // child "section" // child_nth 1 // first_arg // string_value)
 - : string option = Some "This is the second paragraph"
 ```
 

@@ -361,6 +361,9 @@ module L : sig
   (** [arg n] is a lens to the [n]-th argument of a node, starting at 0.
       Operates in O(n) time. *)
 
+  val first_arg : (node, annot_value) lens
+  (** [first_arg] is [arg 0]. *)
+
   val prop : string -> (node, annot_value) lens
   (** Lens to the property with the given name. Operates in O(n) time. *)
 
