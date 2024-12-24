@@ -1,4 +1,5 @@
 (* $ make generate-re2c *)
+(* vim: set filetype=ocaml: *)
 
 (* no unused variables *)
 [@@@warning "-27"]

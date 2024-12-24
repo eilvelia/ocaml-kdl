@@ -155,12 +155,10 @@ value:
   | value=INTEGER {
     (* Even if the input is positive, int_of_string_opt can return a
        negative integer for 0x / 0o / 0b prefixes. We probably want to avoid
-       this behavior and be consistent regardless of the prefix. *)
-    let negative = value.[0] = '-' in
-    match int_of_string_opt value with
-    | Some int when int < 0 && not negative -> `Int_raw value
-    | Some int when int > 0 && negative -> `Int_raw value
-    | Some int -> `Int int
+       this behavior and be consistent regardless of the prefix. This uses
+       signed representation only. *)
+    match signed_int_of_string_opt value with
+    | Some x -> `Int x
     | None -> `Int_raw value
   }
   | value=FLOAT { `Float_raw value }

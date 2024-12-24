@@ -1,6 +1,6 @@
 open Ast
 
-(* we can replace option with result for more detailed errors *)
+(* note: we can possibly replace option with result for more detailed errors *)
 
 type ('s, 'a) lens = {
   get : 's -> 'a option;
@@ -21,8 +21,8 @@ let set_exn a v lens =
   | Some v -> v
   | None -> failwith "Lens failed to match"
 
-(* update can be added to the definition of [lens] to increase performance with
-   more specialized implementations *)
+(* note: update can possibly be added to the definition of [lens] to increase
+   performance with more specialized implementations *)
 
 let update f a lens =
   match lens.get a with

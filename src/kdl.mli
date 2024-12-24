@@ -32,14 +32,17 @@ module Num : sig
   (** Convert the number to [string]. *)
 
   val to_float : [< t ] -> float
-  (** Convert the number to [float]. [Failure] might be raised in case
-      [`Int_raw] or [`Float_raw] contain an invalid literal, which should not
-      happen if they were constructed by the parsing functions. *)
+  (** Convert the number to [float], potentially losing precision.
+
+      [Failure] might be raised in case [`Int_raw] or [`Float_raw] contain an
+      invalid literal, which should not happen if they were constructed by the
+      parsing functions. *)
 
   val to_int : [< t ] -> int option
   (** Convert the number to [int]. Results in [None] if [`Int_raw] or
-      [`Float_raw] are invalid literals or do not fit in [int], or if [`Float_raw]
-      is not a whole number. [`Float_raw string] is parsed as [float]. *)
+      [`Float_raw] are invalid literals or do not fit in [int], or if
+      [`Float_raw] is not a whole number. [`Float_raw str] is parsed as a
+      [float] that must be in the [[-(2^53-1), (2^53-1)]] interval. *)
 
   val to_int_exn : [< t ] -> int
   (** Raising version of [to_int].
@@ -89,8 +92,7 @@ module Num : sig
   val of_nativeint : nativeint -> [> t ]
 
   val equal : [< t ] -> [< t ] -> bool
-  (** Note that a number value may not necessarily be normalized.
-      When checking for equality, [`Float_raw string] is parsed as [float]. *)
+  (** Note that number values may not necessarily be normalized. *)
 end
 
 type number = Num.t

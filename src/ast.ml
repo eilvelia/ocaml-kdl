@@ -1,5 +1,16 @@
 open Sexplib0
 
+(** [signed_int_of_string_opt str] is similar to [int_of_string_opt str],
+    but prohibits unsigned ranges in case the prefix of the number is one of
+    [0x 0b 0o]. This function assumes that negative numbers begin with [-]. *)
+let signed_int_of_string_opt str =
+  let negative = String.length str >= 1 && String.unsafe_get str 0 = '-' in
+  match int_of_string str with
+  | int when int < 0 && not negative -> None
+  | int when int > 0 && negative -> None
+  | int -> Some int
+  | exception Failure _ -> None
+
 module Num = struct
   type t = [
     | `Int of int
@@ -23,138 +34,135 @@ module Num = struct
     | `Float_raw str -> float_of_string str
 
   open struct
+    let check_safe_int_float_bounds =
+      let min = -9007199254740991. and max = 9007199254740991. in
+      fun f -> f >= min && f <= max
+
+    let safe_int_float_of_string str =
+      match float_of_string str with
+      | f when Float.is_integer f && check_safe_int_float_bounds f -> Some f
+      | _ -> None
+      | exception Failure _ -> None
+
     let check_int_bounds =
       let min = Int.to_float Int.min_int and max = Int.to_float Int.max_int in
-      fun f -> f >= min && f <= max
-
-    let check_int32_bounds =
-      let min = Int32.to_float Int32.min_int
-      and max = Int32.to_float Int32.max_int in
-      fun f -> f >= min && f <= max
-
-    let check_int64_bounds =
-      let min = Int64.to_float Int64.min_int
-      and max = Int64.to_float Int64.max_int in
-      fun f -> f >= min && f <= max
-
-    let check_nativeint_bounds =
-      let min = Nativeint.to_float Nativeint.min_int
-      and max = Nativeint.to_float Nativeint.max_int in
       fun f -> f >= min && f <= max
 
     let check_unsigned_int_bounds =
       let max = Int.to_float Int.max_int *. 2. +. 1. in
       fun f -> f >= 0. && f <= max
 
+    let check_int32_bounds =
+      let min = Int32.to_float Int32.min_int
+      and max = Int32.to_float Int32.max_int in
+      fun f -> f >= min && f <= max
+
     let check_unsigned_int32_bounds =
       let max = Int32.to_float Int32.max_int *. 2. +. 1. in
       fun f -> f >= 0. && f <= max
 
-    let check_unsigned_int64_bounds =
-      let max = Int64.to_float Int64.max_int *. 2. +. 1. in
-      fun f -> f >= 0. && f <= max
+    let check_nativeint_bounds =
+      let min = Nativeint.to_float Nativeint.min_int
+      and max = Nativeint.to_float Nativeint.max_int in
+      fun f -> f >= min && f <= max
 
     let check_unsigned_nativeint_bounds =
       let max = Nativeint.to_float Nativeint.max_int *. 2. +. 1. in
       fun f -> f >= 0. && f <= max
 
     let[@inline] to_unsigned_literal lit =
-      (* 42 -> 0u42, 0x42 -> 0x42, etc. somewhat hacky *)
-      if String.length lit >= 1 && lit.[0] = '-'
-         && not (String.length lit = 2 && lit.[1] = '0') then
+      (* Somewhat hacky. Makes sure decimal numbers are prefixed with 0u.
+         Examples: 42 -> 0u42, 0x42 -> 0x42.
+         Fails for negative non-zero numbers. *)
+      let len = String.length lit in
+      if len >= 1 && lit.[0] = '-' && not (len = 2 && lit.[1] = '0') then
         None
+      else if len >= 3 then
+        match lit.[1] with
+        | 'x' | 'o' | 'b' | 'u' -> Some lit
+        | _ -> Some ("0u" ^ lit)
       else
-        let with_prefix = String.length lit >= 3
-          && (lit.[1] = 'x' || lit.[1] = 'o' || lit.[1] = 'b') in
-        Some (if with_prefix then lit else "0u" ^ lit)
+        Some lit
+
+    let (>>=) = Option.bind
   end
 
   let to_int : [< t ] -> int option = function
     | `Int int -> Some int
     | `Int_raw str -> int_of_string_opt str
     | `Float_raw str ->
-      match float_of_string_opt str with
-      | Some f when Float.is_integer f && check_int_bounds f ->
-        Some (Float.to_int f)
-      | Some _ | None -> None
+      match safe_int_float_of_string str with
+      | Some f when check_int_bounds f -> Some (Int.of_float f)
+      | _ -> None
 
   let to_int_unsigned : [< t ] -> int option = function
     | `Int int -> if int >= 0 then Some int else None
-    | `Int_raw str -> Option.bind (to_unsigned_literal str) int_of_string_opt
+    | `Int_raw str -> to_unsigned_literal str >>= int_of_string_opt
     | `Float_raw str ->
-      match float_of_string_opt str with
-      | Some f when Float.is_integer f && check_unsigned_int_bounds f ->
-        Some (Float.to_int f)
-      | Some _ | None -> None
+      match safe_int_float_of_string str with
+      | Some f when check_unsigned_int_bounds f -> Some (Int.of_float f)
+      | _ -> None
 
   let to_int32 : [< t ] -> int32 option = function
-    | `Int int when Sys.int_size > 32 ->
-      if int > Int32.to_int Int32.max_int then None else Some (Int32.of_int int)
+    | `Int int when Sys.int_size > 32 && int > Int32.to_int Int32.max_int ->
+      None
     | `Int int -> Some (Int32.of_int int)
     | `Int_raw str -> Int32.of_string_opt str
     | `Float_raw str ->
-      match float_of_string_opt str with
-      | Some f when Float.is_integer f && check_int32_bounds f ->
-        Some (Int32.of_float f)
-      | Some _ | None -> None
+      match safe_int_float_of_string str with
+      | Some f when check_int32_bounds f -> Some (Int32.of_float f)
+      | _ -> None
 
   let to_int32_unsigned : [< t ] -> int32 option = function
-    | `Int int when Sys.int_size > 32 ->
-      if int >= 0 && int < Int32.to_int Int32.max_int * 2 + 1 then
-        Some (Int32.of_int int)
-      else None
-    | `Int int -> if int >= 0 then Some (Int32.of_int int) else None
-    | `Int_raw str -> Option.bind (to_unsigned_literal str) Int32.of_string_opt
+    | `Int int when int < 0 -> None
+    | `Int int when Sys.int_size > 32 && int > Int32.to_int Int32.max_int lsl 1 + 1 ->
+      None
+    | `Int int -> Some (Int32.of_int int)
+    | `Int_raw str -> to_unsigned_literal str >>= Int32.of_string_opt
     | `Float_raw str ->
-      match float_of_string_opt str with
-      | Some f when Float.is_integer f && check_unsigned_int32_bounds f ->
-        Some (Int32.of_float f)
-      | Some _ | None -> None
+      match safe_int_float_of_string str with
+      | Some f when check_unsigned_int32_bounds f -> Some (Int32.of_float f)
+      | _ -> None
 
   let to_int64 : [< t ] -> int64 option = function
     | `Int int -> Some (Int64.of_int int)
     | `Int_raw str -> Int64.of_string_opt str
     | `Float_raw str ->
-      (* Note that this can lose accuracy *)
-      match float_of_string_opt str with
-      | Some f when Float.is_integer f && check_int64_bounds f ->
-        Some (Int64.of_float f)
-      | Some _ | None -> None
+      match safe_int_float_of_string str with
+      | Some f -> Some (Int64.of_float f)
+      | None -> None
 
   let to_int64_unsigned : [< t ] -> int64 option = function
-    | `Int int -> if int >= 0 then Some (Int64.of_int int) else None
-    | `Int_raw str -> Option.bind (to_unsigned_literal str) Int64.of_string_opt
+    | `Int int when int < 0 -> None
+    | `Int int -> Some (Int64.of_int int)
+    | `Int_raw str -> to_unsigned_literal str >>= Int64.of_string_opt
     | `Float_raw str ->
-      match float_of_string_opt str with
-      | Some f when Float.is_integer f && check_unsigned_int64_bounds f ->
-        Some (Int64.of_float f)
-      | Some _ | None -> None
+      match safe_int_float_of_string str with
+      | Some f when f >= 0.0 -> Some (Int64.of_float f)
+      | _ -> None
 
   let to_nativeint : [< t ] -> nativeint option = function
-    | `Int int when Nativeint.size < Sys.int_size ->
-      if int > Nativeint.to_int Nativeint.max_int then
-        None
-      else Some (Nativeint.of_int int)
+    | `Int int when Nativeint.size < Sys.int_size && int > Nativeint.(to_int max_int) ->
+      None
     | `Int int -> Some (Nativeint.of_int int)
     | `Int_raw str -> Nativeint.of_string_opt str
     | `Float_raw str ->
-      match float_of_string_opt str with
-      | Some f when Float.is_integer f && check_nativeint_bounds f ->
-        Some (Nativeint.of_float f)
-      | Some _ | None -> None
+      match safe_int_float_of_string str with
+      | Some f when check_nativeint_bounds f -> Some (Nativeint.of_float f)
+      | _ -> None
 
   let to_nativeint_unsigned : [< t ] -> nativeint option = function
+    | `Int int when int < 0 -> None
     | `Int int when Nativeint.size < Sys.int_size ->
       (match Nativeint.(unsigned_to_int (neg 1n)) with
-      | Some max when int >= 0 && int <= max -> Some (Nativeint.of_int int)
+      | Some max when int <= max -> Some (Nativeint.of_int int)
       | Some _ | None -> None)
-    | `Int int -> if int >= 0 then Some (Nativeint.of_int int) else None
-    | `Int_raw str -> Option.bind (to_unsigned_literal str) Nativeint.of_string_opt
+    | `Int int -> Some (Nativeint.of_int int)
+    | `Int_raw str -> to_unsigned_literal str >>= Nativeint.of_string_opt
     | `Float_raw str ->
-      match float_of_string_opt str with
-      | Some f when Float.is_integer f && check_unsigned_nativeint_bounds f ->
-        Some (Nativeint.of_float f)
-      | Some _ | None -> None
+      match safe_int_float_of_string str with
+      | Some f when check_unsigned_nativeint_bounds f -> Some (Nativeint.of_float f)
+      | _ -> None
 
   let to_int_exn num =
     match to_int num with Some x -> x | None -> failwith "Kdl.Num.to_int_exn"
@@ -172,10 +180,7 @@ module Num = struct
 
   let of_string : string -> [> t ] option = fun input ->
     (* Note: Does not check that the literal is a valid KDL number *)
-    let negative = String.length input >= 1 && input.[0] = '-' in
-    match int_of_string_opt input with
-    | Some x when x < 0 && not negative -> Some (`Int_raw input)
-    | Some x when x > 0 && negative -> Some (`Int_raw input)
+    match signed_int_of_string_opt input with
     | Some x -> Some (`Int x)
     | None ->
       match float_of_string_opt input with
@@ -183,14 +188,15 @@ module Num = struct
       | None -> None
 
   let of_float : float -> [> t ] = fun x ->
-    if Float.is_integer x && check_int_bounds x then
+    if Float.is_integer x && check_safe_int_float_bounds x && check_int_bounds x then
       `Int (Float.to_int x)
     else `Float_raw (Float.to_string x)
 
   let of_int : int -> [> t ] = fun x -> `Int x
 
   let of_int32 : int32 -> [> t ] =
-    if Sys.int_size >= 32 then fun x -> `Int (Int32.to_int x)
+    if Sys.int_size >= 32 then
+      fun x -> `Int (Int32.to_int x)
     else fun x ->
       let min = Int32.of_int Int.min_int and max = Int32.of_int Int.max_int in
       let fits = x >= min && x <= max in
@@ -202,7 +208,8 @@ module Num = struct
     if fits then `Int (Int64.to_int x) else `Int_raw (Int64.to_string x)
 
   let of_nativeint : nativeint -> [> t ] =
-    if Nativeint.size <= Sys.int_size then fun x -> `Int (Nativeint.to_int x)
+    if Nativeint.size <= Sys.int_size then
+      fun x -> `Int (Nativeint.to_int x)
     else fun x ->
       let min = Nativeint.of_int Int.min_int
       and max = Nativeint.of_int Int.max_int in
@@ -212,21 +219,18 @@ module Num = struct
   let equal (x : [< t ]) (y : [< t ]) =
     match x, y with
     | `Int i1, `Int i2 -> Int.equal i1 i2
-    (* The string is not necessarily normalized *)
+    (* The strings are not necessarily normalized *)
     | `Int_raw s1, `Int_raw s2 -> String.equal s1 s2
-    | `Float_raw d1, `Float_raw d2 ->
-      (match float_of_string_opt d1, float_of_string_opt d2 with
-      | Some f1, Some f2 -> Float.equal f1 f2
-      | _ -> false)
+    | `Float_raw d1, `Float_raw d2 -> String.equal d1 d2
     | `Int i, `Int_raw s | `Int_raw s, `Int i -> String.equal (Int.to_string i) s
     | `Int i, `Float_raw d | `Float_raw d, `Int i ->
-      (match float_of_string_opt d with
-      | Some f when Float.is_integer f -> Float.equal (Float.of_int i) f
-      | Some _ | None -> false)
+      (match safe_int_float_of_string d with
+      | Some f -> Int.equal (Float.to_int f) i
+      | None -> false)
     | `Int_raw ilit, `Float_raw d | `Float_raw d, `Int_raw ilit ->
-      (match float_of_string_opt d with
-      | Some f when Float.is_integer f -> String.equal (Float.to_string f) ilit
-      | Some _ | None -> false)
+      (match safe_int_float_of_string d with
+      | Some f -> String.equal (Float.to_string f) ilit
+      | None -> false)
 end
 
 type number = Num.t

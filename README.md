@@ -23,7 +23,7 @@ ocaml-kdl for KDL v1, see the `v0.1.0` tag.
 - [x] Lenses
 - [ ] KDL Query Language (KQL)
 - [ ] KDL Schema Language
-- [ ] Preserve formatting when editing
+- [ ] Formatting-preserving editing
 <!-- - [ ] ppx_deriving_kdl -->
 
 ## Usage

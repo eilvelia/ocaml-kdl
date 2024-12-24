@@ -33,7 +33,7 @@ let pp_typed_value fmt : [< typed_value ] -> unit = function
   | `F32 x -> Format.fprintf fmt "`F32 %f" x
   | `F64 x -> Format.fprintf fmt "`F64 %f" x
   | `Base64 x -> Format.fprintf fmt "`Base64 \"%s\"" (String.escaped (Bytes.to_string x))
-  | `Other (annot, _) -> Format.fprintf fmt "`Other (%s, _)" annot
+  | `Other (annot, _) -> Format.fprintf fmt "`Other %s" annot
   | `Unannotated _ -> Format.fprintf fmt "`Unannotated"
 
 exception Invalid_annotation of string
