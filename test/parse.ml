@@ -217,7 +217,7 @@ let%expect_test "# in identifiers" =
 
 let%expect_test "identifiers cannot contain special characters ([, etc.)" =
   test {|- a[=]1|};
-  [%expect {| Error: :1:4-1:5: Illegal character '[' |}]
+  [%expect {| Error: :1:4-1:5: Illegal character |}]
 
 let%expect_test "-- as an identifier" =
   test {|- --=0|};
@@ -248,7 +248,7 @@ let%expect_test "multi-line comments can wrap lines" =
 
 let%expect_test "unterminated multiline comment" =
   test {|- /* comment "/*" */ |};
-  [%expect {| Error: :1:22-1:22: Unterminated comment |}]
+  [%expect {| Error: :1:3-1:22: Unterminated comment |}]
 
 let%expect_test "/- can disable a node as a whole" =
   test {|
@@ -314,6 +314,14 @@ let%expect_test "redefinition of a property" =
   [%expect {|
     (- (prop a (number-int 0)) (prop prop (number-int 3))
      (prop b (number-int 4))) |}]
+
+let%expect_test "NUL mid-string" =
+  test "\"no\x00de\"";
+  [%expect {| Error: :1:1-1:5: Illegal character |}]
+
+let%expect_test "NUL as identifier start" =
+  test "node \x00arg";
+  [%expect {| Error: :1:6-1:7: Illegal character |}]
 
 let%test_module "numbers" = (module struct
   let%expect_test "an integer" =
@@ -416,15 +424,15 @@ let%test_module "strings" = (module struct
 
   let%expect_test "raw strings with \" followed by a greater number of #" =
     test {|- #"hello "## world"#   "hello "# world"|};
-    [%expect {| Error: :1:11-1:14: Expected 1 hash symbol(s), got 2 |}]
+    [%expect {| Error: :1:3-1:14: Expected 1 hash symbol(s), got 2 |}]
 
   let%expect_test "closing the raw string with a greater number of #" =
     test {|- #"raw string"##|};
-    [%expect {| Error: :1:15-1:18: Expected 1 hash symbol(s), got 2 |}]
+    [%expect {| Error: :1:3-1:18: Expected 1 hash symbol(s), got 2 |}]
 
   let%expect_test "unterminated raw string" =
     test {|- ##"raw string"#|};
-    [%expect {| Error: :1:18-1:18: Unterminated raw string |}]
+    [%expect {| Error: :1:3-1:18: Unterminated raw string |}]
 
   let%expect_test "multi-line strings" =
     test {|multi-line """
@@ -504,27 +512,27 @@ let%test_module "strings" = (module struct
         echo 1
           echo 2
          """|};
-    [%expect {| Error: :4:10-4:13: Invalid multiline string: unmatched whitespace prefix |}]
+    [%expect {| Error: :1:7-4:13: Invalid multiline string: unmatched whitespace prefix |}]
 
   let%expect_test "multi-line string with non-whitespace prefix (error)" =
     test {|multi """
         echo 1
           echo 2
       2 """|};
-    [%expect {| Error: :4:9-4:12: Invalid multiline string: non-whitespace prefix |}]
+    [%expect {| Error: :1:7-4:12: Invalid multiline string: non-whitespace prefix |}]
 
   let%expect_test "newline in single-line raw strings is not allowed" =
     test {|- #"multiline
                raw string
       "#|};
-    [%expect {| Error: :1:14-2:1: Unterminated raw string |}]
+    [%expect {| Error: :1:3-2:1: Unterminated raw string |}]
 
   let%expect_test "newline in single-line strings is not allowed" =
     test {|- "multiline
 
       string
       "|};
-    [%expect {| Error: :1:13-2:1: Unterminated string |}]
+    [%expect {| Error: :1:3-2:1: Unterminated string |}]
 
   let%expect_test "last line of the multi-line string must be whitespace" =
     test {|multi-line """
@@ -532,7 +540,7 @@ let%test_module "strings" = (module struct
                   This is the base indentation
                           bar
              abcd """|};
-    [%expect {| Error: :5:19-5:22: Invalid multiline string: non-whitespace prefix |}]
+    [%expect {| Error: :1:12-5:22: Invalid multiline string: non-whitespace prefix |}]
 
   let%expect_test "escapes" =
     test {|- "\"\\\b\f\n\r\t"|};
@@ -550,15 +558,15 @@ let%test_module "strings" = (module struct
 
   let%expect_test "\\u{...} cannot contain more than 6 hex digits" =
     test {|- "\u{1234567}"|};
-    [%expect {| Error: :1:4-1:15: Invalid unicode scalar value |}]
+    [%expect {| Error: :1:3-1:15: Invalid unicode scalar value |}]
 
   let%expect_test "\\u{...} should not accept a > 0x10FFFF code point" =
     test {|- "\u{11FBBF} _"|};
-    [%expect {| Error: :1:4-1:14: Invalid unicode scalar value |}]
+    [%expect {| Error: :1:3-1:14: Invalid unicode scalar value |}]
 
   let%expect_test "empty \\u{} without the code point" =
     test {|- "\u{}"|};
-    [%expect {| Error: :1:4-1:6: Invalid escape sequence |}]
+    [%expect {| Error: :1:3-1:6: Invalid escape sequence |}]
 
   let%expect_test "whitespace escape should remove space from the string" =
     test {|- "foo \   bar"|};
@@ -655,15 +663,15 @@ let%test_module "unicode" = (module struct
 
   let%expect_test "Surrogate in the \\u escape" =
     test {|node "\u{D801}"|};
-    [%expect {| Error: :1:7-1:15: Invalid unicode scalar value |}]
+    [%expect {| Error: :1:6-1:15: Invalid unicode scalar value |}]
 
   let%expect_test "Invalid UTF-8" =
     test "node \"\xff\"";
-    [%expect {| Error: :1:6-1:7: Malformed UTF-8 |}]
+    [%expect {| Error: :1:6-1:8: Malformed UTF-8 |}]
 
   let%expect_test "Invalid UTF-8 with a surrogate" =
-    test "node \"\"\n\xED\xA0\x81\n\"\"\"";
-    [%expect {| Error: :2:1-2:1: Malformed UTF-8 |}]
+    test "node \"\"\"\n\xED\xA0\x81\n\"\"\"";
+    [%expect {| Error: :1:6-2:2: Malformed UTF-8 |}]
 end)
 
 let%expect_test "the type annotations example" =

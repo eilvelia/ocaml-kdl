@@ -7,31 +7,31 @@ open Printf
 
 let document_revised =
   MenhirLib.Convert.Simplified.traditional2revised Parser.document
-
-let parse ?(fname = "") lexbuf : (t, error) result =
-  Sedlexing.set_filename lexbuf fname;
-  Sedlexing.set_position lexbuf Loc.zero_pos;
-  try Ok (document_revised @@ Lexer.main_tokenizer lexbuf) with
+let parse yyrecord : (t, error) result =
+  try Ok (document_revised @@ Lexer.main_tokenizer yyrecord) with
   | Sedlexing.InvalidCodepoint code ->
-    Error (sprintf "Invalid code point %d" code, Sedlexing.lexing_bytes_positions lexbuf)
+    Error (sprintf "Invalid code point %d" code, Lexer.get_location yyrecord)
   | Sedlexing.MalFormed ->
-    Error ("Malformed UTF-8", Sedlexing.lexing_bytes_positions lexbuf)
+    Error ("Malformed UTF-8", Lexer.get_location yyrecord)
   | Custom_lexing_error msg ->
-    Error (msg, Sedlexing.lexing_bytes_positions lexbuf)
+    Error (msg, Lexer.get_location yyrecord)
   | Custom_parsing_error (msg, loc) ->
     Error (msg, loc)
   | Parser.Error ->
-    (* This does not seem to print correct locations with lookahead tokens *)
-    Error ("Syntax error", Sedlexing.lexing_bytes_positions lexbuf)
+    (* note: this doesn't seem to print correct locations with lookahead tokens *)
+    Error ("Syntax error", Lexer.get_location yyrecord)
 
-let from_string ?fname input = parse ?fname (Sedlexing.Utf8.from_string input)
+let from_string ?fname input =
+  parse (Lexer.make_tokenizer_yyrecord ?fname input)
 
 let from_string_exn ?fname input =
   match from_string ?fname input with
   | Ok x -> x
   | Error err -> raise @@ Parse_error err
 
-let from_channel ?fname input = parse ?fname (Sedlexing.Utf8.from_channel input)
+let from_channel ?fname input =
+  (* TODO: Implement buffer refiling *)
+  from_string ?fname (In_channel.input_all input)
 
 let from_channel_exn ?fname input =
   match from_channel ?fname input with

@@ -45,7 +45,10 @@ let run test =
   | Ok result ->
     let result = normalize_numbers result in
     let actual = String.trim (Kdl.to_string result) in
-    let expected = String.trim (read_file expect_file) in
+    let expected =
+      if failing_test then
+        "[failing]"
+      else String.trim (read_file expect_file) in
     if String.equal actual expected then
       `Success
     else begin

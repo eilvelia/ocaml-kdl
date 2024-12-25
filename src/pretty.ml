@@ -1,11 +1,11 @@
 open Ast
 
 let pp_string fmt str =
-  if Re2c_lexer.is_valid_ident str then
+  if Lexer.is_valid_ident str then
     Format.pp_print_string fmt str
   else begin
     Format.pp_print_char fmt '"';
-    Format.pp_print_string fmt (Re2c_lexer.escape_string str);
+    Format.pp_print_string fmt (Lexer.escape_string str);
     Format.pp_print_char fmt '"';
   end
 

@@ -1,8 +1,17 @@
-val main : Sedlexing.lexbuf -> Parser.token
-(** Note: Use [main_tokenizer] instead of [Sedlexing.with_tokenizer main]
-    to keep the string locations correct. *)
+val resolve_escapes : string -> string
 
-val main_tokenizer
-  :  Sedlexing.lexbuf
-  -> unit -> Parser.token * Lexing.position * Lexing.position
-(** The KDL lexer. *)
+val skip_whitespace_line : ?offset:int -> string -> int
+
+val is_fully_whitespace : string -> bool
+
+val is_valid_ident : string -> bool
+
+val escape_string : string -> string
+
+type tokenizer_yyrecord
+
+val make_tokenizer_yyrecord : ?fname:string -> string -> tokenizer_yyrecord
+
+val main_tokenizer : tokenizer_yyrecord -> unit -> Parser.token * Lexing.position * Lexing.position
+
+val get_location : tokenizer_yyrecord -> Lexing.position * Lexing.position
