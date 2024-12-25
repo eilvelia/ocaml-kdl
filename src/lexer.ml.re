@@ -120,6 +120,7 @@ let add_lexeme_substring yyrecord strbuf =
   re2c:invert-captures = 1;
   re2c:indent:string = "  ";
   re2c:eof = 0;
+  re2c:YYPEEK = "get";
 
   whitespace_char =
       [\u0009] // Character Tabulation U+0009

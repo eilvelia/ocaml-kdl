@@ -3,16 +3,11 @@ include Err
 include Pretty
 include Typeannots
 module L = Lens
-open Printf
 
 let document_revised =
   MenhirLib.Convert.Simplified.traditional2revised Parser.document
 let parse yyrecord : (t, error) result =
   try Ok (document_revised @@ Lexer.main_tokenizer yyrecord) with
-  | Sedlexing.InvalidCodepoint code ->
-    Error (sprintf "Invalid code point %d" code, Lexer.get_location yyrecord)
-  | Sedlexing.MalFormed ->
-    Error ("Malformed UTF-8", Lexer.get_location yyrecord)
   | Custom_lexing_error msg ->
     Error (msg, Lexer.get_location yyrecord)
   | Custom_parsing_error (msg, loc) ->
