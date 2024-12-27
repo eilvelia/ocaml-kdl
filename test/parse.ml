@@ -49,12 +49,14 @@ let%expect_test "true/false/null are not allowed as identifiers" =
   test {|- null=0|};
   test {|null 0|};
   test {|- foo=true bar=false|};
+  test {|truea|};
   [%expect {|
     Error: :1:13-1:17: true is not a valid identifier. Did you mean "true" (quoted) or #true?
     Error: :1:3-1:8: false is not a valid identifier. Did you mean "false" (quoted) or #false?
     Error: :1:3-1:7: null is not a valid identifier. Did you mean "null" (quoted) or #null?
     Error: :1:1-1:5: null is not a valid identifier. Did you mean "null" (quoted) or #null?
     Error: :1:7-1:11: true is not a valid identifier. Did you mean "true" (quoted) or #true?
+    (truea)
     |}]
 
 let%expect_test "numeric non-# keywords are not allowed as identifiers" =
@@ -317,7 +319,7 @@ let%expect_test "redefinition of a property" =
 
 let%expect_test "NUL mid-string" =
   test "\"no\x00de\"";
-  [%expect {| Error: :1:1-1:5: Illegal character |}]
+  [%expect {| Error: :1:4-1:5: Illegal character |}]
 
 let%expect_test "NUL as identifier start" =
   test "node \x00arg";
@@ -424,15 +426,15 @@ let%test_module "strings" = (module struct
 
   let%expect_test "raw strings with \" followed by a greater number of #" =
     test {|- #"hello "## world"#   "hello "# world"|};
-    [%expect {| Error: :1:3-1:14: Expected 1 hash symbol(s), got 2 |}]
+    [%expect {| Error: :1:11-1:14: Expected 1 hash symbol(s), got 2 |}]
 
   let%expect_test "closing the raw string with a greater number of #" =
     test {|- #"raw string"##|};
-    [%expect {| Error: :1:3-1:18: Expected 1 hash symbol(s), got 2 |}]
+    [%expect {| Error: :1:15-1:18: Expected 1 hash symbol(s), got 2 |}]
 
   let%expect_test "unterminated raw string" =
     test {|- ##"raw string"#|};
-    [%expect {| Error: :1:3-1:18: Unterminated raw string |}]
+    [%expect {| Error: :1:18-1:18: Unterminated raw string |}]
 
   let%expect_test "multi-line strings" =
     test {|multi-line """
@@ -512,27 +514,35 @@ let%test_module "strings" = (module struct
         echo 1
           echo 2
          """|};
-    [%expect {| Error: :1:7-4:13: Invalid multiline string: unmatched whitespace prefix |}]
+    [%expect {| Error: :1:10-2:9: Invalid multiline string: unmatched whitespace prefix |}]
 
   let%expect_test "multi-line string with non-whitespace prefix (error)" =
     test {|multi """
         echo 1
           echo 2
       2 """|};
-    [%expect {| Error: :1:7-4:12: Invalid multiline string: non-whitespace prefix |}]
+    [%expect {| Error: :4:1-4:12: Invalid multiline string: non-whitespace prefix |}]
+
+  let%expect_test "raw multi-line string with non-whitespace prefix (error)" =
+    test {|multi #"""
+        echo 1
+          echo 2
+    foo """#|};
+    [%expect {| Error: :4:1-4:13: Invalid multiline string: non-whitespace prefix |}]
+
 
   let%expect_test "newline in single-line raw strings is not allowed" =
     test {|- #"multiline
                raw string
       "#|};
-    [%expect {| Error: :1:3-2:1: Unterminated raw string |}]
+    [%expect {| Error: :1:14-2:1: Unterminated raw string |}]
 
   let%expect_test "newline in single-line strings is not allowed" =
     test {|- "multiline
 
       string
       "|};
-    [%expect {| Error: :1:3-2:1: Unterminated string |}]
+    [%expect {| Error: :1:13-2:1: Unterminated string |}]
 
   let%expect_test "last line of the multi-line string must be whitespace" =
     test {|multi-line """
@@ -540,7 +550,7 @@ let%test_module "strings" = (module struct
                   This is the base indentation
                           bar
              abcd """|};
-    [%expect {| Error: :1:12-5:22: Invalid multiline string: non-whitespace prefix |}]
+    [%expect {| Error: :5:1-5:22: Invalid multiline string: non-whitespace prefix |}]
 
   let%expect_test "escapes" =
     test {|- "\"\\\b\f\n\r\t"|};
@@ -558,15 +568,15 @@ let%test_module "strings" = (module struct
 
   let%expect_test "\\u{...} cannot contain more than 6 hex digits" =
     test {|- "\u{1234567}"|};
-    [%expect {| Error: :1:3-1:15: Invalid unicode scalar value |}]
+    [%expect {| Error: :1:4-1:15: Invalid unicode scalar value (too many digits) |}]
 
   let%expect_test "\\u{...} should not accept a > 0x10FFFF code point" =
     test {|- "\u{11FBBF} _"|};
-    [%expect {| Error: :1:3-1:14: Invalid unicode scalar value |}]
+    [%expect {| Error: :1:4-1:14: Invalid unicode scalar value |}]
 
   let%expect_test "empty \\u{} without the code point" =
     test {|- "\u{}"|};
-    [%expect {| Error: :1:3-1:6: Invalid escape sequence |}]
+    [%expect {| Error: :1:4-1:6: Invalid escape sequence |}]
 
   let%expect_test "whitespace escape should remove space from the string" =
     test {|- "foo \   bar"|};
@@ -663,15 +673,15 @@ let%test_module "unicode" = (module struct
 
   let%expect_test "Surrogate in the \\u escape" =
     test {|node "\u{D801}"|};
-    [%expect {| Error: :1:6-1:15: Invalid unicode scalar value |}]
+    [%expect {| Error: :1:7-1:15: Invalid unicode scalar value |}]
 
   let%expect_test "Invalid UTF-8" =
     test "node \"\xff\"";
-    [%expect {| Error: :1:6-1:8: Malformed UTF-8 |}]
+    [%expect {| Error: :1:7-1:8: Malformed UTF-8 |}]
 
   let%expect_test "Invalid UTF-8 with a surrogate" =
     test "node \"\"\"\n\xED\xA0\x81\n\"\"\"";
-    [%expect {| Error: :1:6-2:2: Malformed UTF-8 |}]
+    [%expect {| Error: :2:1-2:2: Malformed UTF-8 |}]
 end)
 
 let%expect_test "the type annotations example" =
@@ -788,3 +798,768 @@ let%expect_test "the ci example" =
             (prop run (string  "echo foo\
                               \necho bar\
                               \necho baz")))))))))) |}]
+
+let%expect_test "very large input" =
+  test {|
+    name CI
+
+    on push pull_request
+
+    env {
+      RUSTFLAGS -Dwarnings
+    }
+
+    jobs {
+      fmt_and_docs "Check fmt & build docs" {
+        runs-on ubuntu-latest
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain stable
+            components rustfmt
+            override #true
+          }
+          step rustfmt { run cargo fmt --all -- --check }
+          step docs { run cargo doc --no-deps }
+        }
+      }
+      build_and_test "Build & Test" {
+        runs-on "${{ matrix.os }}"
+        strategy {
+          matrix {
+            rust "1.46.0" stable
+            os ubuntu-latest macOS-latest windows-latest
+          }
+        }
+
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain "${{ matrix.rust }}"
+            components clippy
+            override #true
+          }
+          step Clippy { run cargo clippy --all -- -D warnings }
+          step "Run tests" { run cargo test --all --verbose }
+          step "Other Stuff" run="""
+            echo foo
+            echo bar
+            echo baz
+            """
+        }
+      }
+    }
+
+    name CI
+
+    on push pull_request
+
+    env {
+      RUSTFLAGS -Dwarnings
+    }
+
+    jobs {
+      fmt_and_docs "Check fmt & build docs" {
+        runs-on ubuntu-latest
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain stable
+            components rustfmt
+            override #true
+          }
+          step rustfmt { run cargo fmt --all -- --check }
+          step docs { run cargo doc --no-deps }
+        }
+      }
+      build_and_test "Build & Test" {
+        runs-on "${{ matrix.os }}"
+        strategy {
+          matrix {
+            rust "1.46.0" stable
+            os ubuntu-latest macOS-latest windows-latest
+          }
+        }
+
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain "${{ matrix.rust }}"
+            components clippy
+            override #true
+          }
+          step Clippy { run cargo clippy --all -- -D warnings }
+          step "Run tests" { run cargo test --all --verbose }
+          step "Other Stuff" run="""
+            echo foo
+            echo bar
+            echo baz
+            """
+        }
+      }
+    }
+
+    name CI
+
+    on push pull_request
+
+    env {
+      RUSTFLAGS -Dwarnings
+    }
+
+    jobs {
+      fmt_and_docs "Check fmt & build docs" {
+        runs-on ubuntu-latest
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain stable
+            components rustfmt
+            override #true
+          }
+          step rustfmt { run cargo fmt --all -- --check }
+          step docs { run cargo doc --no-deps }
+        }
+      }
+      build_and_test "Build & Test" {
+        runs-on "${{ matrix.os }}"
+        strategy {
+          matrix {
+            rust "1.46.0" stable
+            os ubuntu-latest macOS-latest windows-latest
+          }
+        }
+
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain "${{ matrix.rust }}"
+            components clippy
+            override #true
+          }
+          step Clippy { run cargo clippy --all -- -D warnings }
+          step "Run tests" { run cargo test --all --verbose }
+          step "Other Stuff" run="""
+            echo foo
+            echo bar
+            echo baz
+            """
+        }
+      }
+    }
+
+    name CI
+
+    on push pull_request
+
+    env {
+      RUSTFLAGS -Dwarnings
+    }
+
+    jobs {
+      fmt_and_docs "Check fmt & build docs" {
+        runs-on ubuntu-latest
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain stable
+            components rustfmt
+            override #true
+          }
+          step rustfmt { run cargo fmt --all -- --check }
+          step docs { run cargo doc --no-deps }
+        }
+      }
+      build_and_test "Build & Test" {
+        runs-on "${{ matrix.os }}"
+        strategy {
+          matrix {
+            rust "1.46.0" stable
+            os ubuntu-latest macOS-latest windows-latest
+          }
+        }
+
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain "${{ matrix.rust }}"
+            components clippy
+            override #true
+          }
+          step Clippy { run cargo clippy --all -- -D warnings }
+          step "Run tests" { run cargo test --all --verbose }
+          step "Other Stuff" run="""
+            echo foo
+            echo bar
+            echo baz
+            """
+        }
+      }
+    }
+
+    name CI
+
+    on push pull_request
+
+    env {
+      RUSTFLAGS -Dwarnings
+    }
+
+    jobs {
+      fmt_and_docs "Check fmt & build docs" {
+        runs-on ubuntu-latest
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain stable
+            components rustfmt
+            override #true
+          }
+          step rustfmt { run cargo fmt --all -- --check }
+          step docs { run cargo doc --no-deps }
+        }
+      }
+      build_and_test "Build & Test" {
+        runs-on "${{ matrix.os }}"
+        strategy {
+          matrix {
+            rust "1.46.0" stable
+            os ubuntu-latest macOS-latest windows-latest
+          }
+        }
+
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain "${{ matrix.rust }}"
+            components clippy
+            override #true
+          }
+          step Clippy { run cargo clippy --all -- -D warnings }
+          step "Run tests" { run cargo test --all --verbose }
+          step "Other Stuff" run="""
+            echo foo
+            echo bar
+            echo baz
+            """
+        }
+      }
+    }
+
+    name CI
+
+    on push pull_request
+
+    env {
+      RUSTFLAGS -Dwarnings
+    }
+
+    jobs {
+      fmt_and_docs "Check fmt & build docs" {
+        runs-on ubuntu-latest
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain stable
+            components rustfmt
+            override #true
+          }
+          step rustfmt { run cargo fmt --all -- --check }
+          step docs { run cargo doc --no-deps }
+        }
+      }
+      build_and_test "Build & Test" {
+        runs-on "${{ matrix.os }}"
+        strategy {
+          matrix {
+            rust "1.46.0" stable
+            os ubuntu-latest macOS-latest windows-latest
+          }
+        }
+
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain "${{ matrix.rust }}"
+            components clippy
+            override #true
+          }
+          step Clippy { run cargo clippy --all -- -D warnings }
+          step "Run tests" { run cargo test --all --verbose }
+          step "Other Stuff" run="""
+            echo foo
+            echo bar
+            echo baz
+            """
+        }
+      }
+    }
+
+    name CI
+
+    on push pull_request
+
+    env {
+      RUSTFLAGS -Dwarnings
+    }
+
+    jobs {
+      fmt_and_docs "Check fmt & build docs" {
+        runs-on ubuntu-latest
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain stable
+            components rustfmt
+            override #true
+          }
+          step rustfmt { run cargo fmt --all -- --check }
+          step docs { run cargo doc --no-deps }
+        }
+      }
+      build_and_test "Build & Test" {
+        runs-on "${{ matrix.os }}"
+        strategy {
+          matrix {
+            rust "1.46.0" stable
+            os ubuntu-latest macOS-latest windows-latest
+          }
+        }
+
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain "${{ matrix.rust }}"
+            components clippy
+            override #true
+          }
+          step Clippy { run cargo clippy --all -- -D warnings }
+          step "Run tests" { run cargo test --all --verbose }
+          step "Other Stuff" run="""
+            echo foo
+            echo bar
+            echo baz
+            """
+        }
+      }
+    }
+
+    name CI
+
+    on push pull_request
+
+    env {
+      RUSTFLAGS -Dwarnings
+    }
+
+    jobs {
+      fmt_and_docs "Check fmt & build docs" {
+        runs-on ubuntu-latest
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain stable
+            components rustfmt
+            override #true
+          }
+          step rustfmt { run cargo fmt --all -- --check }
+          step docs { run cargo doc --no-deps }
+        }
+      }
+      build_and_test "Build & Test" {
+        runs-on "${{ matrix.os }}"
+        strategy {
+          matrix {
+            rust "1.46.0" stable
+            os ubuntu-latest macOS-latest windows-latest
+          }
+        }
+
+        steps {
+          step uses="actions/checkout@v1"
+          step "Install Rust" uses="actions-rs/toolchain@v1" {
+            profile minimal
+            toolchain "${{ matrix.rust }}"
+            components clippy
+            override #true
+          }
+          step Clippy { run cargo clippy --all -- -D warnings }
+          step "Run tests" { run cargo test --all --verbose }
+          step "Other Stuff" run="""
+            echo foo
+            echo bar
+            echo baz
+            """
+        }
+      }
+    }
+  |};
+  [%expect {|
+    ((name (string CI)) (on (string push) (string pull_request))
+     (env (children (RUSTFLAGS (string -Dwarnings))))
+     (jobs
+      (children
+       (fmt_and_docs (string "Check fmt & build docs")
+        (children (runs-on (string ubuntu-latest))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal)) (toolchain (string stable))
+             (components (string rustfmt)) (override (bool true))))
+           (step (string rustfmt)
+            (children
+             (run (string cargo) (string fmt) (string --all) (string --)
+              (string --check))))
+           (step (string docs)
+            (children (run (string cargo) (string doc) (string --no-deps))))))))
+       (build_and_test (string "Build & Test")
+        (children (runs-on (string "${{ matrix.os }}"))
+         (strategy
+          (children
+           (matrix
+            (children (rust (string 1.46.0) (string stable))
+             (os (string ubuntu-latest) (string macOS-latest)
+              (string windows-latest))))))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal))
+             (toolchain (string "${{ matrix.rust }}"))
+             (components (string clippy)) (override (bool true))))
+           (step (string Clippy)
+            (children
+             (run (string cargo) (string clippy) (string --all) (string --)
+              (string -D) (string warnings))))
+           (step (string "Run tests")
+            (children
+             (run (string cargo) (string test) (string --all) (string --verbose))))
+           (step (string "Other Stuff")
+            (prop run (string  "echo foo\
+                              \necho bar\
+                              \necho baz")))))))))
+     (name (string CI)) (on (string push) (string pull_request))
+     (env (children (RUSTFLAGS (string -Dwarnings))))
+     (jobs
+      (children
+       (fmt_and_docs (string "Check fmt & build docs")
+        (children (runs-on (string ubuntu-latest))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal)) (toolchain (string stable))
+             (components (string rustfmt)) (override (bool true))))
+           (step (string rustfmt)
+            (children
+             (run (string cargo) (string fmt) (string --all) (string --)
+              (string --check))))
+           (step (string docs)
+            (children (run (string cargo) (string doc) (string --no-deps))))))))
+       (build_and_test (string "Build & Test")
+        (children (runs-on (string "${{ matrix.os }}"))
+         (strategy
+          (children
+           (matrix
+            (children (rust (string 1.46.0) (string stable))
+             (os (string ubuntu-latest) (string macOS-latest)
+              (string windows-latest))))))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal))
+             (toolchain (string "${{ matrix.rust }}"))
+             (components (string clippy)) (override (bool true))))
+           (step (string Clippy)
+            (children
+             (run (string cargo) (string clippy) (string --all) (string --)
+              (string -D) (string warnings))))
+           (step (string "Run tests")
+            (children
+             (run (string cargo) (string test) (string --all) (string --verbose))))
+           (step (string "Other Stuff")
+            (prop run (string  "echo foo\
+                              \necho bar\
+                              \necho baz")))))))))
+     (name (string CI)) (on (string push) (string pull_request))
+     (env (children (RUSTFLAGS (string -Dwarnings))))
+     (jobs
+      (children
+       (fmt_and_docs (string "Check fmt & build docs")
+        (children (runs-on (string ubuntu-latest))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal)) (toolchain (string stable))
+             (components (string rustfmt)) (override (bool true))))
+           (step (string rustfmt)
+            (children
+             (run (string cargo) (string fmt) (string --all) (string --)
+              (string --check))))
+           (step (string docs)
+            (children (run (string cargo) (string doc) (string --no-deps))))))))
+       (build_and_test (string "Build & Test")
+        (children (runs-on (string "${{ matrix.os }}"))
+         (strategy
+          (children
+           (matrix
+            (children (rust (string 1.46.0) (string stable))
+             (os (string ubuntu-latest) (string macOS-latest)
+              (string windows-latest))))))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal))
+             (toolchain (string "${{ matrix.rust }}"))
+             (components (string clippy)) (override (bool true))))
+           (step (string Clippy)
+            (children
+             (run (string cargo) (string clippy) (string --all) (string --)
+              (string -D) (string warnings))))
+           (step (string "Run tests")
+            (children
+             (run (string cargo) (string test) (string --all) (string --verbose))))
+           (step (string "Other Stuff")
+            (prop run (string  "echo foo\
+                              \necho bar\
+                              \necho baz")))))))))
+     (name (string CI)) (on (string push) (string pull_request))
+     (env (children (RUSTFLAGS (string -Dwarnings))))
+     (jobs
+      (children
+       (fmt_and_docs (string "Check fmt & build docs")
+        (children (runs-on (string ubuntu-latest))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal)) (toolchain (string stable))
+             (components (string rustfmt)) (override (bool true))))
+           (step (string rustfmt)
+            (children
+             (run (string cargo) (string fmt) (string --all) (string --)
+              (string --check))))
+           (step (string docs)
+            (children (run (string cargo) (string doc) (string --no-deps))))))))
+       (build_and_test (string "Build & Test")
+        (children (runs-on (string "${{ matrix.os }}"))
+         (strategy
+          (children
+           (matrix
+            (children (rust (string 1.46.0) (string stable))
+             (os (string ubuntu-latest) (string macOS-latest)
+              (string windows-latest))))))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal))
+             (toolchain (string "${{ matrix.rust }}"))
+             (components (string clippy)) (override (bool true))))
+           (step (string Clippy)
+            (children
+             (run (string cargo) (string clippy) (string --all) (string --)
+              (string -D) (string warnings))))
+           (step (string "Run tests")
+            (children
+             (run (string cargo) (string test) (string --all) (string --verbose))))
+           (step (string "Other Stuff")
+            (prop run (string  "echo foo\
+                              \necho bar\
+                              \necho baz")))))))))
+     (name (string CI)) (on (string push) (string pull_request))
+     (env (children (RUSTFLAGS (string -Dwarnings))))
+     (jobs
+      (children
+       (fmt_and_docs (string "Check fmt & build docs")
+        (children (runs-on (string ubuntu-latest))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal)) (toolchain (string stable))
+             (components (string rustfmt)) (override (bool true))))
+           (step (string rustfmt)
+            (children
+             (run (string cargo) (string fmt) (string --all) (string --)
+              (string --check))))
+           (step (string docs)
+            (children (run (string cargo) (string doc) (string --no-deps))))))))
+       (build_and_test (string "Build & Test")
+        (children (runs-on (string "${{ matrix.os }}"))
+         (strategy
+          (children
+           (matrix
+            (children (rust (string 1.46.0) (string stable))
+             (os (string ubuntu-latest) (string macOS-latest)
+              (string windows-latest))))))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal))
+             (toolchain (string "${{ matrix.rust }}"))
+             (components (string clippy)) (override (bool true))))
+           (step (string Clippy)
+            (children
+             (run (string cargo) (string clippy) (string --all) (string --)
+              (string -D) (string warnings))))
+           (step (string "Run tests")
+            (children
+             (run (string cargo) (string test) (string --all) (string --verbose))))
+           (step (string "Other Stuff")
+            (prop run (string  "echo foo\
+                              \necho bar\
+                              \necho baz")))))))))
+     (name (string CI)) (on (string push) (string pull_request))
+     (env (children (RUSTFLAGS (string -Dwarnings))))
+     (jobs
+      (children
+       (fmt_and_docs (string "Check fmt & build docs")
+        (children (runs-on (string ubuntu-latest))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal)) (toolchain (string stable))
+             (components (string rustfmt)) (override (bool true))))
+           (step (string rustfmt)
+            (children
+             (run (string cargo) (string fmt) (string --all) (string --)
+              (string --check))))
+           (step (string docs)
+            (children (run (string cargo) (string doc) (string --no-deps))))))))
+       (build_and_test (string "Build & Test")
+        (children (runs-on (string "${{ matrix.os }}"))
+         (strategy
+          (children
+           (matrix
+            (children (rust (string 1.46.0) (string stable))
+             (os (string ubuntu-latest) (string macOS-latest)
+              (string windows-latest))))))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal))
+             (toolchain (string "${{ matrix.rust }}"))
+             (components (string clippy)) (override (bool true))))
+           (step (string Clippy)
+            (children
+             (run (string cargo) (string clippy) (string --all) (string --)
+              (string -D) (string warnings))))
+           (step (string "Run tests")
+            (children
+             (run (string cargo) (string test) (string --all) (string --verbose))))
+           (step (string "Other Stuff")
+            (prop run (string  "echo foo\
+                              \necho bar\
+                              \necho baz")))))))))
+     (name (string CI)) (on (string push) (string pull_request))
+     (env (children (RUSTFLAGS (string -Dwarnings))))
+     (jobs
+      (children
+       (fmt_and_docs (string "Check fmt & build docs")
+        (children (runs-on (string ubuntu-latest))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal)) (toolchain (string stable))
+             (components (string rustfmt)) (override (bool true))))
+           (step (string rustfmt)
+            (children
+             (run (string cargo) (string fmt) (string --all) (string --)
+              (string --check))))
+           (step (string docs)
+            (children (run (string cargo) (string doc) (string --no-deps))))))))
+       (build_and_test (string "Build & Test")
+        (children (runs-on (string "${{ matrix.os }}"))
+         (strategy
+          (children
+           (matrix
+            (children (rust (string 1.46.0) (string stable))
+             (os (string ubuntu-latest) (string macOS-latest)
+              (string windows-latest))))))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal))
+             (toolchain (string "${{ matrix.rust }}"))
+             (components (string clippy)) (override (bool true))))
+           (step (string Clippy)
+            (children
+             (run (string cargo) (string clippy) (string --all) (string --)
+              (string -D) (string warnings))))
+           (step (string "Run tests")
+            (children
+             (run (string cargo) (string test) (string --all) (string --verbose))))
+           (step (string "Other Stuff")
+            (prop run (string  "echo foo\
+                              \necho bar\
+                              \necho baz")))))))))
+     (name (string CI)) (on (string push) (string pull_request))
+     (env (children (RUSTFLAGS (string -Dwarnings))))
+     (jobs
+      (children
+       (fmt_and_docs (string "Check fmt & build docs")
+        (children (runs-on (string ubuntu-latest))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal)) (toolchain (string stable))
+             (components (string rustfmt)) (override (bool true))))
+           (step (string rustfmt)
+            (children
+             (run (string cargo) (string fmt) (string --all) (string --)
+              (string --check))))
+           (step (string docs)
+            (children (run (string cargo) (string doc) (string --no-deps))))))))
+       (build_and_test (string "Build & Test")
+        (children (runs-on (string "${{ matrix.os }}"))
+         (strategy
+          (children
+           (matrix
+            (children (rust (string 1.46.0) (string stable))
+             (os (string ubuntu-latest) (string macOS-latest)
+              (string windows-latest))))))
+         (steps
+          (children (step (prop uses (string actions/checkout@v1)))
+           (step (string "Install Rust")
+            (prop uses (string actions-rs/toolchain@v1))
+            (children (profile (string minimal))
+             (toolchain (string "${{ matrix.rust }}"))
+             (components (string clippy)) (override (bool true))))
+           (step (string Clippy)
+            (children
+             (run (string cargo) (string clippy) (string --all) (string --)
+              (string -D) (string warnings))))
+           (step (string "Run tests")
+            (children
+             (run (string cargo) (string test) (string --all) (string --verbose))))
+           (step (string "Other Stuff")
+            (prop run (string  "echo foo\
+                              \necho bar\
+                              \necho baz"))))))))))
+    |}]

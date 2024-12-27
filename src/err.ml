@@ -1,5 +1,5 @@
 exception Custom_parsing_error of string * Loc.t
-exception Custom_lexing_error of string
+exception Custom_lexing_error of string * Loc.t
 
 type error_loc = Loc.t
 

@@ -34,21 +34,28 @@ let run test =
   let failing_test = Filename.check_suffix test "_fail.kdl" in
   let input_file = Filename.concat "test_cases/input" test in
   let expect_file = Filename.concat "test_cases/expected_kdl" test in
+  let expected =
+    if failing_test then
+      "[failing]"
+    else String.trim (read_file expect_file)
+  in
   let ic = open_in_bin input_file in
   match Kdl.from_channel ic with
   | Error _ when failing_test -> `Success
   | Error err ->
-    let expected = String.trim (read_file expect_file) in
     Format.printf "Test %s failed:\n---(error)---\n%a\n---(expected)---\n%s\n\n"
       test Kdl.pp_error err expected;
+    `Fail
+  | exception exn ->
+    let err = Printexc.to_string exn in
+    let backtrace = String.trim (Printexc.get_backtrace ()) in
+    Format.printf
+      "Test %s failed:\n---(error)---\n[exception]\n%s\n%s\n---(expected)---\n%s\n\n"
+      test err backtrace expected;
     `Fail
   | Ok result ->
     let result = normalize_numbers result in
     let actual = String.trim (Kdl.to_string result) in
-    let expected =
-      if failing_test then
-        "[failing]"
-      else String.trim (read_file expect_file) in
     if String.equal actual expected then
       `Success
     else begin
@@ -58,6 +65,7 @@ let run test =
     end
 
 let kdl_suite_runner () =
+  Printexc.record_backtrace true;
   Kdl.indent := 4;
   let tests = Sys.readdir "test_cases/input" in
   let total = ref 0 and successful = ref 0 in

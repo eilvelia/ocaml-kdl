@@ -6,18 +6,18 @@ module L = Lens
 
 let document_revised =
   MenhirLib.Convert.Simplified.traditional2revised Parser.document
-let parse yyrecord : (t, error) result =
-  try Ok (document_revised @@ Lexer.main_tokenizer yyrecord) with
-  | Custom_lexing_error msg ->
-    Error (msg, Lexer.get_location yyrecord)
+let parse state : (t, error) result =
+  try Ok (document_revised @@ Lexer.main_tokenizer state) with
+  | Custom_lexing_error (msg, loc) ->
+    Error (msg, loc)
   | Custom_parsing_error (msg, loc) ->
     Error (msg, loc)
   | Parser.Error ->
     (* note: this doesn't seem to print correct locations with lookahead tokens *)
-    Error ("Syntax error", Lexer.get_location yyrecord)
+    Error ("Syntax error", Lexer.get_location state)
 
 let from_string ?fname input =
-  parse (Lexer.make_tokenizer_yyrecord ?fname input)
+  parse (Lexer.make_tokenizer_state ?fname input)
 
 let from_string_exn ?fname input =
   match from_string ?fname input with

@@ -12,1067 +12,153 @@ let sprintf = Printf.sprintf
    [String.unsafe_get str (String.length str)], which should in fact be safe.
    The [pos <= String.length str] check is not done here; it is assumed that
    re2c generates correct code. *)
-let get = String.unsafe_get
+let peek = String.unsafe_get
 
-let error msg = raise @@ Err.Custom_lexing_error msg
+type yycondtype = YYC_multi | YYC_single | YYC_rmulti | YYC_rsingle
 
-let malformed_utf8 () = error "Malformed UTF-8"
 
-type 'a yyrecord = {
+type 'a state = {
   info : 'a;
   yyinput : string;
   yylimit : int;
-  mutable yystart : int;
+  mutable yystart : int; (* automaton start *)
   mutable yycursor : int;
   mutable yyaccept : int;
   mutable yymarker : int;
+  mutable yycond : yycondtype;
   
-  mutable yytl0 : int;
-  mutable yytr0 : int;
+  mutable t1 : int;
+  mutable t2 : int;
+  mutable t3 : int;
   
   mutable yyt1 : int;
+  mutable yyt2 : int;
 }
 
-type simple_yyrecord = unit yyrecord
+type simple_state = unit state
 
-let sub str l r = String.sub str l (r - l) [@@inline]
+let sub st l r = String.sub st.yyinput l (r - l) [@@inline]
 
-let group0 yyrecord = sub yyrecord.yyinput yyrecord.yytl0 yyrecord.yytr0
-[@@inline]
-
-(** Rollback to the start of an automaton *)
-let rollback yyrecord = yyrecord.yycursor <- yyrecord.yystart [@@inline]
-
-let make_yyrecord ?(offset = 0) ~info input = {
+let make_st ?(offset = 0) ~info input = {
   info;
   yyinput = input;
   yylimit = String.length input;
   yycursor = offset;
-  yystart = -1;
+  yystart = 0;
   yyaccept = 0;
   yymarker = 0;
+  yycond = YYC_single;
   
-  yytl0 = 0;
-  yytr0 = 0;
+  t1 = 0;
+  t2 = 0;
+  t3 = 0;
   
   yyt1 = 0;
+  yyt2 = 0;
 }
 
-type tokenizer_state = {
+type tokenizer_info = {
   fname : string;
+
+  (* line number and beginning of line offset for yycursor *)
   mutable lnum : int;
   mutable bol : int;
-  mutable start_cnum : int; (* token start, not necessarily automaton start *)
-  mutable start_bol : int;
+
+  (* same, for yystart. these are needed only in case error is raised from
+     a semantic action *)
   mutable start_lnum : int;
+  mutable start_bol : int;
+
+  (* this indicates start of a (more high-level) token we're lexing *)
+  mutable token_cnum : int;
+  mutable token_lnum : int;
+  mutable token_bol : int;
+
   strbuf : Buffer.t;
 }
 
-type tokenizer_yyrecord = tokenizer_state yyrecord
+type tokenizer_state = tokenizer_info state
 
-let make_tokenizer_yyrecord ?(fname = "") input =
-  make_yyrecord ~info:{
+let make_tokenizer_state ?(fname = "") input =
+  make_st ~info:{
     fname;
     lnum = 1;
     bol = 0;
-    start_cnum = 0;
-    start_bol = 0;
     start_lnum = 1;
+    start_bol = 0;
+    token_cnum = 0;
+    token_lnum = 1;
+    token_bol = 0;
     strbuf = Buffer.create 32;
   } input
 
-let newline yyrecord =
-  yyrecord.info.lnum <- yyrecord.info.lnum + 1;
-  yyrecord.info.bol <- yyrecord.yycursor
+let newline ?(pos = -2) st =
+  st.info.lnum <- st.info.lnum + 1;
+  st.info.bol <- if pos >= 0 then pos else st.yycursor
 
-let save_position yyrecord =
-  yyrecord.info.start_cnum <- yyrecord.yycursor;
-  yyrecord.info.start_bol <- yyrecord.info.bol;
-  yyrecord.info.start_lnum <- yyrecord.info.lnum
+let save_start_position st =
+  st.yystart <- st.yycursor;
+  st.info.start_lnum <- st.info.lnum;
+  st.info.start_bol <- st.info.bol
 
-let make_lexing_start_pos yyrecord =
+let save_token_position st =
+  st.info.token_cnum <- st.yycursor;
+  st.info.token_lnum <- st.info.lnum;
+  st.info.start_bol <- st.info.bol
+
+let make_lexing_token_pos st =
   Lexing.{
-    pos_fname = yyrecord.info.fname;
-    pos_lnum = yyrecord.info.start_lnum;
-    pos_bol = yyrecord.info.start_bol;
-    pos_cnum = yyrecord.info.start_cnum;
+    pos_fname = st.info.fname;
+    pos_lnum = st.info.token_lnum;
+    pos_bol = st.info.token_bol;
+    pos_cnum = st.info.token_cnum;
   }
 
-let make_lexing_end_pos yyrecord =
+let make_lexing_start_pos st =
   Lexing.{
-    pos_fname = yyrecord.info.fname;
-    pos_lnum = yyrecord.info.lnum;
-    pos_bol = yyrecord.info.bol;
-    pos_cnum = yyrecord.yycursor;
+    pos_fname = st.info.fname;
+    pos_lnum = st.info.start_lnum;
+    pos_bol = st.info.start_bol;
+    pos_cnum = st.yystart;
   }
 
-let get_location yyrecord =
-  make_lexing_start_pos yyrecord, make_lexing_end_pos yyrecord
+let make_lexing_end_pos st =
+  Lexing.{
+    pos_fname = st.info.fname;
+    pos_lnum = st.info.lnum;
+    pos_bol = st.info.bol;
+    pos_cnum = st.yycursor;
+  }
 
-let lexeme yyrecord =
-  sub yyrecord.yyinput yyrecord.yystart yyrecord.yycursor
+let get_location st = make_lexing_token_pos st, make_lexing_end_pos st
 
-let add_lexeme_substring yyrecord strbuf =
-  let len = yyrecord.yycursor - yyrecord.yystart in
-  Buffer.add_substring strbuf yyrecord.yyinput yyrecord.yystart len
+let lexeme st = sub st st.yystart st.yycursor
 
-(* no unused variables *)
-[@@@warning "-27"]
+let add_lexeme_substring st strbuf =
+  let len = st.yycursor - st.yystart in
+  Buffer.add_substring strbuf st.yyinput st.yystart len
 
+let error st msg =
+  let start_pos = make_lexing_start_pos st and end_pos = make_lexing_end_pos st in
+  raise (Err.Custom_lexing_error (msg, (start_pos, end_pos)))
 
+let malformed_utf8 st = error st "Malformed UTF-8"
 
-let resolve_unicode_escape yyrecord =
-  let len = yyrecord.yytr0 - yyrecord.yytl0 in
-  if len > 6 then
-    error "Invalid unicode scalar value";
-  let code_str = group0 yyrecord in
-  let code = int_of_string ("0x" ^ code_str) in
-  if not @@ Uchar.is_valid code then
-    error "Invalid unicode scalar value";
-  Uchar.unsafe_of_int code
+let rollback_to st (rollback_pos : Lexing.position) =
+  st.yycursor <- rollback_pos.pos_cnum;
+  st.info.bol <- rollback_pos.pos_bol;
+  st.info.lnum <- rollback_pos.pos_lnum
 
+[@@@warning "-unused-var-strict"]
 
-let rec yy0 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x00'
-    | '\x01'..'['
-    | ']'..'\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy53 [@tailcall]) yyrecord strbuf
-      ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy1 [@tailcall]) yyrecord strbuf
-      )
-    | '\\' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy3 [@tailcall]) yyrecord strbuf
-    | '\xC2'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy6 [@tailcall]) yyrecord strbuf
-    | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy7 [@tailcall]) yyrecord strbuf
-    | '\xE1'..'\xEC'
-    | '\xEE'..'\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy8 [@tailcall]) yyrecord strbuf
-    | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy9 [@tailcall]) yyrecord strbuf
-    | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy10 [@tailcall]) yyrecord strbuf
-    | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy11 [@tailcall]) yyrecord strbuf
-    | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy12 [@tailcall]) yyrecord strbuf
-    | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy4 [@tailcall]) yyrecord strbuf
+(* a bit dangerous, but disabled because of the conditionals codegen *)
+[@@@warning "-partial-match"]
 
-and yy1 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  (yy2 [@tailcall]) yyrecord strbuf
 
-and yy2 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  
-    add_lexeme_substring yyrecord strbuf;
-    resolve_escapes yyrecord strbuf
 
 
-and yy3 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x00'
-    | '\x01'..'\b'
-    | '\x0E'..'\x1F'
-    | '!'
-    | '#'..'['
-    | ']'..'a'
-    | 'c'..'e'
-    | 'g'..'m'
-    | 'o'..'q'
-    | 'v'..'\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy2 [@tailcall]) yyrecord strbuf
-      ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy13 [@tailcall]) yyrecord strbuf
-      )
-    | '\t'..'\r'
-    | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy17 [@tailcall]) yyrecord strbuf
-    | '\\' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy18 [@tailcall]) yyrecord strbuf
-    | 'b' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy19 [@tailcall]) yyrecord strbuf
-    | 'f' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy20 [@tailcall]) yyrecord strbuf
-    | 'n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy21 [@tailcall]) yyrecord strbuf
-    | 'r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy22 [@tailcall]) yyrecord strbuf
-    | 's' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy23 [@tailcall]) yyrecord strbuf
-    | 't' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy24 [@tailcall]) yyrecord strbuf
-    | 'u' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy25 [@tailcall]) yyrecord strbuf
-    | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy26 [@tailcall]) yyrecord strbuf
-    | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy28 [@tailcall]) yyrecord strbuf
-    | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy29 [@tailcall]) yyrecord strbuf
-    | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy30 [@tailcall]) yyrecord strbuf
-    | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy31 [@tailcall]) yyrecord strbuf
-    | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy32 [@tailcall]) yyrecord strbuf
-    | '\xE4'..'\xEC'
-    | '\xEE'..'\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy33 [@tailcall]) yyrecord strbuf
-    | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy34 [@tailcall]) yyrecord strbuf
-    | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy35 [@tailcall]) yyrecord strbuf
-    | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy36 [@tailcall]) yyrecord strbuf
-    | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy37 [@tailcall]) yyrecord strbuf
-    | _ -> (yy2 [@tailcall]) yyrecord strbuf
-
-and yy4 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  (yy5 [@tailcall]) yyrecord strbuf
-
-and yy5 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  malformed_utf8 ()
-
-and yy6 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy1 [@tailcall]) yyrecord strbuf
-    | _ -> (yy5 [@tailcall]) yyrecord strbuf
-
-and yy7 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy38 [@tailcall]) yyrecord strbuf
-    | _ -> (yy5 [@tailcall]) yyrecord strbuf
-
-and yy8 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy38 [@tailcall]) yyrecord strbuf
-    | _ -> (yy5 [@tailcall]) yyrecord strbuf
-
-and yy9 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy38 [@tailcall]) yyrecord strbuf
-    | _ -> (yy5 [@tailcall]) yyrecord strbuf
-
-and yy10 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy39 [@tailcall]) yyrecord strbuf
-    | _ -> (yy5 [@tailcall]) yyrecord strbuf
-
-and yy11 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy39 [@tailcall]) yyrecord strbuf
-    | _ -> (yy5 [@tailcall]) yyrecord strbuf
-
-and yy12 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy39 [@tailcall]) yyrecord strbuf
-    | _ -> (yy5 [@tailcall]) yyrecord strbuf
-
-and yy13 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  (yy14 [@tailcall]) yyrecord strbuf
-
-and yy14 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  error "Invalid escape sequence"
-
-and yy15 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yyaccept <- 2;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\t'..'\r'
-    | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy40 [@tailcall]) yyrecord strbuf
-    | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy41 [@tailcall]) yyrecord strbuf
-    | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy42 [@tailcall]) yyrecord strbuf
-    | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy43 [@tailcall]) yyrecord strbuf
-    | _ -> (yy16 [@tailcall]) yyrecord strbuf
-
-and yy16 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  resolve_escapes yyrecord strbuf
-
-and yy17 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_char strbuf '"'; resolve_escapes yyrecord strbuf
-
-and yy18 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_char strbuf '\\'; resolve_escapes yyrecord strbuf
-
-and yy19 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_char strbuf '\b'; resolve_escapes yyrecord strbuf
-
-and yy20 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_char strbuf '\012'; resolve_escapes yyrecord strbuf
-
-and yy21 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_char strbuf '\n'; resolve_escapes yyrecord strbuf
-
-and yy22 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_char strbuf '\r'; resolve_escapes yyrecord strbuf
-
-and yy23 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_char strbuf ' '; resolve_escapes yyrecord strbuf
-
-and yy24 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_char strbuf '\t'; resolve_escapes yyrecord strbuf
-
-and yy25 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yyaccept <- 3;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '{' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy44 [@tailcall]) yyrecord strbuf
-    | _ -> (yy14 [@tailcall]) yyrecord strbuf
-
-and yy26 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\x9F'
-    | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy13 [@tailcall]) yyrecord strbuf
-    | '\x85'
-    | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy27 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  match yyrecord.yyaccept with
-    | 0 -> (yy2 [@tailcall]) yyrecord strbuf
-    | 1 -> (yy5 [@tailcall]) yyrecord strbuf
-    | 2 -> (yy16 [@tailcall]) yyrecord strbuf
-    | _ -> (yy14 [@tailcall]) yyrecord strbuf
-
-and yy28 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy13 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy29 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy28 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy30 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x99'
-    | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy28 [@tailcall]) yyrecord strbuf
-    | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy45 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy31 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy46 [@tailcall]) yyrecord strbuf
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy47 [@tailcall]) yyrecord strbuf
-    | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy28 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy32 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy45 [@tailcall]) yyrecord strbuf
-    | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy28 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy33 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy28 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy34 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy28 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy35 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy33 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy36 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy33 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy37 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy33 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy38 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy1 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy39 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy38 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy40 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x85'
-    | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy41 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy48 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy42 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy49 [@tailcall]) yyrecord strbuf
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy50 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy43 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy48 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy44 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '0'..'9'
-    | 'A'..'F'
-    | 'a'..'f' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy51 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy45 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy13 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy46 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xA8'..'\xA9'
-    | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | '\x8B'..'\xA7'
-    | '\xAA'..'\xAE'
-    | '\xB0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy13 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy47 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x9E'
-    | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy13 [@tailcall]) yyrecord strbuf
-    | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy48 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy49 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xA8'..'\xA9'
-    | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy50 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy15 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy51 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '0'..'9'
-    | 'A'..'F'
-    | 'a'..'f' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy51 [@tailcall]) yyrecord strbuf
-    | '}' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy52 [@tailcall]) yyrecord strbuf
-    | _ -> (yy27 [@tailcall]) yyrecord strbuf
-
-and yy52 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
-  yyrecord.yytr0 <- yyrecord.yytr0 - 1;
-  
-    let uchar = resolve_unicode_escape yyrecord in
-    Buffer.add_utf_8_uchar strbuf uchar;
-    resolve_escapes yyrecord strbuf
-
-
-and yy53 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.contents strbuf
-
-and resolve_escapes_body (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  (yy0 [@tailcall]) yyrecord strbuf
-
-
-
-and resolve_escapes yyrecord strbuf =
-  yyrecord.yystart <- yyrecord.yycursor;
-  resolve_escapes_body yyrecord strbuf
-
-
-let rec yy54 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy57 [@tailcall]) yyrecord
-    | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy59 [@tailcall]) yyrecord
-    | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy61 [@tailcall]) yyrecord
-    | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy62 [@tailcall]) yyrecord
-    | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy63 [@tailcall]) yyrecord
-    | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy64 [@tailcall]) yyrecord
-    | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy65 [@tailcall]) yyrecord
-    | _ ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy75 [@tailcall]) yyrecord
-      ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy55 [@tailcall]) yyrecord
-      )
-
-and yy55 (yyrecord : simple_yyrecord) : int =
-  (yy56 [@tailcall]) yyrecord
-
-and yy56 (yyrecord : simple_yyrecord) : int =
-  ~-1
-
-and yy57 (yyrecord : simple_yyrecord) : int =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy57 [@tailcall]) yyrecord
-    | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy66 [@tailcall]) yyrecord
-    | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy68 [@tailcall]) yyrecord
-    | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy69 [@tailcall]) yyrecord
-    | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy70 [@tailcall]) yyrecord
-    | _ -> (yy58 [@tailcall]) yyrecord
-
-and yy58 (yyrecord : simple_yyrecord) : int =
-  skip_whitespace_line yyrecord
-
-and yy59 (yyrecord : simple_yyrecord) : int =
-  (yy60 [@tailcall]) yyrecord
-
-and yy60 (yyrecord : simple_yyrecord) : int =
-  yyrecord.yycursor
-
-and yy61 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy59 [@tailcall]) yyrecord
-    | _ -> (yy60 [@tailcall]) yyrecord
-
-and yy62 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy59 [@tailcall]) yyrecord
-    | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy57 [@tailcall]) yyrecord
-    | _ -> (yy56 [@tailcall]) yyrecord
-
-and yy63 (yyrecord : simple_yyrecord) : int =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy71 [@tailcall]) yyrecord
-    | _ -> (yy56 [@tailcall]) yyrecord
-
-and yy64 (yyrecord : simple_yyrecord) : int =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy72 [@tailcall]) yyrecord
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy73 [@tailcall]) yyrecord
-    | _ -> (yy56 [@tailcall]) yyrecord
-
-and yy65 (yyrecord : simple_yyrecord) : int =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy71 [@tailcall]) yyrecord
-    | _ -> (yy56 [@tailcall]) yyrecord
-
-and yy66 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy57 [@tailcall]) yyrecord
-    | _ -> (yy67 [@tailcall]) yyrecord
-
-and yy67 (yyrecord : simple_yyrecord) : int =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  if (yyrecord.yyaccept == 0) then (yy58 [@tailcall]) yyrecord
-  else (yy56 [@tailcall]) yyrecord
-
-and yy68 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy71 [@tailcall]) yyrecord
-    | _ -> (yy67 [@tailcall]) yyrecord
-
-and yy69 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy74 [@tailcall]) yyrecord
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy73 [@tailcall]) yyrecord
-    | _ -> (yy67 [@tailcall]) yyrecord
-
-and yy70 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy71 [@tailcall]) yyrecord
-    | _ -> (yy67 [@tailcall]) yyrecord
-
-and yy71 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy57 [@tailcall]) yyrecord
-    | _ -> (yy67 [@tailcall]) yyrecord
-
-and yy72 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy57 [@tailcall]) yyrecord
-    | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy59 [@tailcall]) yyrecord
-    | _ -> (yy67 [@tailcall]) yyrecord
-
-and yy73 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy57 [@tailcall]) yyrecord
-    | _ -> (yy67 [@tailcall]) yyrecord
-
-and yy74 (yyrecord : simple_yyrecord) : int =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy57 [@tailcall]) yyrecord
-    | _ -> (yy67 [@tailcall]) yyrecord
-
-and yy75 (yyrecord : simple_yyrecord) : int =
-  yyrecord.yycursor
-
-and skip_whitespace_line (yyrecord : simple_yyrecord) : int =
-  (yy54 [@tailcall]) yyrecord
-
-
-
-
-let rec yy76 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy79 [@tailcall]) yyrecord
-    | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy81 [@tailcall]) yyrecord
-    | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy82 [@tailcall]) yyrecord
-    | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy83 [@tailcall]) yyrecord
-    | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy84 [@tailcall]) yyrecord
-    | _ ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy93 [@tailcall]) yyrecord
-      ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy77 [@tailcall]) yyrecord
-      )
-
-and yy77 (yyrecord : simple_yyrecord) : bool =
-  (yy78 [@tailcall]) yyrecord
-
-and yy78 (yyrecord : simple_yyrecord) : bool =
-  false
-
-and yy79 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy79 [@tailcall]) yyrecord
-    | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy85 [@tailcall]) yyrecord
-    | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy87 [@tailcall]) yyrecord
-    | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy88 [@tailcall]) yyrecord
-    | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy89 [@tailcall]) yyrecord
-    | _ -> (yy80 [@tailcall]) yyrecord
-
-and yy80 (yyrecord : simple_yyrecord) : bool =
-  is_fully_whitespace yyrecord
-
-and yy81 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy79 [@tailcall]) yyrecord
-    | _ -> (yy78 [@tailcall]) yyrecord
-
-and yy82 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy90 [@tailcall]) yyrecord
-    | _ -> (yy78 [@tailcall]) yyrecord
-
-and yy83 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy91 [@tailcall]) yyrecord
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy92 [@tailcall]) yyrecord
-    | _ -> (yy78 [@tailcall]) yyrecord
-
-and yy84 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy90 [@tailcall]) yyrecord
-    | _ -> (yy78 [@tailcall]) yyrecord
-
-and yy85 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy79 [@tailcall]) yyrecord
-    | _ -> (yy86 [@tailcall]) yyrecord
-
-and yy86 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  if (yyrecord.yyaccept == 0) then (yy80 [@tailcall]) yyrecord
-  else (yy78 [@tailcall]) yyrecord
-
-and yy87 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy90 [@tailcall]) yyrecord
-    | _ -> (yy86 [@tailcall]) yyrecord
-
-and yy88 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy91 [@tailcall]) yyrecord
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy92 [@tailcall]) yyrecord
-    | _ -> (yy86 [@tailcall]) yyrecord
-
-and yy89 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy90 [@tailcall]) yyrecord
-    | _ -> (yy86 [@tailcall]) yyrecord
-
-and yy90 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy79 [@tailcall]) yyrecord
-    | _ -> (yy86 [@tailcall]) yyrecord
-
-and yy91 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy79 [@tailcall]) yyrecord
-    | _ -> (yy86 [@tailcall]) yyrecord
-
-and yy92 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy79 [@tailcall]) yyrecord
-    | _ -> (yy86 [@tailcall]) yyrecord
-
-and yy93 (yyrecord : simple_yyrecord) : bool =
-  true
-
-and is_fully_whitespace (yyrecord : simple_yyrecord) : bool =
-  (yy76 [@tailcall]) yyrecord
-
-
-
-
-let rec yy94 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+let rec yy0 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -1088,87 +174,87 @@ let rec yy94 (yyrecord : simple_yyrecord) : bool =
     | 'u'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
     | '+' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy100 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy6 [@tailcall]) st
     | '-' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy101 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy7 [@tailcall]) st
     | '.' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy102 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy8 [@tailcall]) st
     | 'f' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy103 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy9 [@tailcall]) st
     | 'i' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy104 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy10 [@tailcall]) st
     | 'n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy105 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy11 [@tailcall]) st
     | 't' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy106 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy12 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy107 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy13 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy108 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy14 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy109 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy15 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy110 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy16 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy111 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy17 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy112 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy18 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy113 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy19 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy114 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy20 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy115 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy21 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy116 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy22 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy117 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy23 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy118 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy24 [@tailcall]) st
     | _ ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy148 [@tailcall]) yyrecord
+      if (st.yylimit <= st.yycursor) then (
+        (yy54 [@tailcall]) st
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy95 [@tailcall]) yyrecord
+        st.yycursor <- st.yycursor + 1;
+        (yy1 [@tailcall]) st
       )
 
-and yy95 (yyrecord : simple_yyrecord) : bool =
-  (yy96 [@tailcall]) yyrecord
+and yy1 (st : simple_state) : bool =
+  (yy2 [@tailcall]) st
 
-and yy96 (yyrecord : simple_yyrecord) : bool =
+and yy2 (st : simple_state) : bool =
   false
 
-and yy97 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  (yy98 [@tailcall]) yyrecord yych
+and yy3 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  (yy4 [@tailcall]) st yych
 
-and yy98 (yyrecord : simple_yyrecord) (yych : char) : bool =
+and yy4 (st : simple_state) (yych : char) : bool =
   match yych with
     | '!'
     | '$'..'\''
@@ -1179,399 +265,399 @@ and yy98 (yyrecord : simple_yyrecord) (yych : char) : bool =
     | '^'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy119 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy25 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy122 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy28 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy123 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy29 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy124 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy30 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy125 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy31 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy126 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy32 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy127 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy33 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy128 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy34 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy129 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy35 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy130 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy36 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy131 [@tailcall]) yyrecord
-    | _ -> (yy99 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy37 [@tailcall]) st
+    | _ -> (yy5 [@tailcall]) st
 
-and yy99 (yyrecord : simple_yyrecord) : bool =
+and yy5 (st : simple_state) : bool =
   
-    yyrecord.yycursor >= yyrecord.yylimit
+    st.yycursor >= st.yylimit
 
 
-and yy100 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy6 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
-    | '0'..'9' -> (yy99 [@tailcall]) yyrecord
+    | '0'..'9' -> (yy5 [@tailcall]) st
     | '.' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy102 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy8 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy101 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy7 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
-    | '0'..'9' -> (yy99 [@tailcall]) yyrecord
+    | '0'..'9' -> (yy5 [@tailcall]) st
     | '.' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy102 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy8 [@tailcall]) st
     | 'i' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy104 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy10 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy102 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy8 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | '0'..'9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy132 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy38 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy103 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy9 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'a' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy134 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy40 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy104 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy10 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy135 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy41 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy105 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy11 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'a' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy136 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy42 [@tailcall]) st
     | 'u' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy137 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy43 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy106 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy12 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy138 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy44 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy107 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy13 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy108 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy14 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy109 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy15 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy110 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy16 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy139 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy45 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy111 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy17 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy140 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy46 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy141 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy47 [@tailcall]) st
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy112 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy18 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy139 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy45 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy113 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy19 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy114 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy20 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy115 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy21 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy142 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy48 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy116 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy22 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy126 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy32 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy117 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy23 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy126 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy32 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy118 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy24 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy126 [@tailcall]) yyrecord
-    | _ -> (yy96 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy32 [@tailcall]) st
+    | _ -> (yy2 [@tailcall]) st
 
-and yy119 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy25 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy120 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  match yyrecord.yyaccept with
-    | 0 -> (yy99 [@tailcall]) yyrecord
-    | 1 -> (yy96 [@tailcall]) yyrecord
-    | 2 -> (yy133 [@tailcall]) yyrecord
-    | _ -> (yy145 [@tailcall]) yyrecord
+and yy26 (st : simple_state) : bool =
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy5 [@tailcall]) st
+    | 1 -> (yy2 [@tailcall]) st
+    | 2 -> (yy39 [@tailcall]) st
+    | _ -> (yy51 [@tailcall]) st
 
-and yy121 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy27 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy122 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy28 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy123 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy29 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy139 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy45 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy124 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy30 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy140 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy46 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy141 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy47 [@tailcall]) st
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy125 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy31 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy139 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy45 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy126 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy32 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy127 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy33 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy128 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy34 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy121 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy27 [@tailcall]) st
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy142 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy48 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy129 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy35 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy126 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy32 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy130 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy36 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy126 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy32 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy131 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy37 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy126 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy32 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy132 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 2;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy38 (st : simple_state) : bool =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -1582,118 +668,118 @@ and yy132 (yyrecord : simple_yyrecord) : bool =
     | '^'..'z'
     | '|'
     | '~'
-    | '\xC2'..'\xF4' -> (yy98 [@tailcall]) yyrecord yych
-    | _ -> (yy133 [@tailcall]) yyrecord
+    | '\xC2'..'\xF4' -> (yy4 [@tailcall]) st yych
+    | _ -> (yy39 [@tailcall]) st
 
-and yy133 (yyrecord : simple_yyrecord) : bool =
+and yy39 (st : simple_state) : bool =
   false
 
-and yy134 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy40 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'l' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy143 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy49 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy135 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy41 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'f' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy144 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy50 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy136 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy42 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy144 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy50 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy137 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy43 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'l' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy146 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy52 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy138 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy44 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'u' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy147 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy53 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy139 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy45 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy140 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy46 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x8B'..'\x8D'
     | '\x90'..'\xA7'
     | '\xB0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy141 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy47 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xA5'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy142 (yyrecord : simple_yyrecord) : bool =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy48 (st : simple_state) : bool =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy97 [@tailcall]) yyrecord
-    | _ -> (yy120 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy3 [@tailcall]) st
+    | _ -> (yy26 [@tailcall]) st
 
-and yy143 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy49 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 's' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy147 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy53 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy144 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 3;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy50 (st : simple_state) : bool =
+  st.yyaccept <- 3;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -1704,2288 +790,2939 @@ and yy144 (yyrecord : simple_yyrecord) : bool =
     | '^'..'z'
     | '|'
     | '~'
-    | '\xC2'..'\xF4' -> (yy98 [@tailcall]) yyrecord yych
-    | _ -> (yy145 [@tailcall]) yyrecord
+    | '\xC2'..'\xF4' -> (yy4 [@tailcall]) st yych
+    | _ -> (yy51 [@tailcall]) st
 
-and yy145 (yyrecord : simple_yyrecord) : bool =
+and yy51 (st : simple_state) : bool =
   
-    not (yyrecord.yycursor >= yyrecord.yylimit)
+    not (st.yycursor >= st.yylimit)
 
 
-and yy146 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy52 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'l' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy144 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy50 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy147 (yyrecord : simple_yyrecord) : bool =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy53 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy99 [@tailcall]) yyrecord
+    | '\x00' -> (yy5 [@tailcall]) st
     | 'e' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy144 [@tailcall]) yyrecord
-    | _ -> (yy98 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy50 [@tailcall]) st
+    | _ -> (yy4 [@tailcall]) st yych
 
-and yy148 (yyrecord : simple_yyrecord) : bool =
+and yy54 (st : simple_state) : bool =
   false
 
-and is_valid_ident (yyrecord : simple_yyrecord) : bool =
-  (yy94 [@tailcall]) yyrecord
+and is_valid_ident (st : simple_state) : bool =
+  (yy0 [@tailcall]) st
 
 
 
 
-let rec yy149 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+let rec yy55 (st : simple_state) (strbuf : Buffer.t) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\x07'
     | '\x0E'..'\x1F'
     | '\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy176 [@tailcall]) yyrecord strbuf
+      if (st.yylimit <= st.yycursor) then (
+        (yy82 [@tailcall]) st strbuf
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy150 [@tailcall]) yyrecord strbuf
+        st.yycursor <- st.yycursor + 1;
+        (yy56 [@tailcall]) st strbuf
       )
     | '\b' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy151 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy57 [@tailcall]) st strbuf
     | '\t' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy152 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy58 [@tailcall]) st strbuf
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy153 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st strbuf
     | '\x0B'
     | ' '..'!'
     | '#'..'['
     | ']'..'~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy154 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy60 [@tailcall]) st strbuf
     | '\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy155 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy61 [@tailcall]) st strbuf
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy156 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy62 [@tailcall]) st strbuf
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy157 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy63 [@tailcall]) st strbuf
     | '\\' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy158 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy64 [@tailcall]) st strbuf
     | '\xC2'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy161 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy67 [@tailcall]) st strbuf
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy162 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy68 [@tailcall]) st strbuf
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy163 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy69 [@tailcall]) st strbuf
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy164 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy70 [@tailcall]) st strbuf
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy165 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy71 [@tailcall]) st strbuf
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy166 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy72 [@tailcall]) st strbuf
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy167 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy73 [@tailcall]) st strbuf
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy168 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy74 [@tailcall]) st strbuf
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy169 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy75 [@tailcall]) st strbuf
     | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy159 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy65 [@tailcall]) st strbuf
 
-and yy150 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
+and yy56 (st : simple_state) (strbuf : Buffer.t) : string =
   
-    let udecode = String.get_utf_8_uchar yyrecord.yyinput yyrecord.yystart in
+    let udecode = String.get_utf_8_uchar st.yyinput st.yystart in
     if not (Uchar.utf_decode_is_valid udecode) then
       failwith "Malformed UTF-8";
     let code = Uchar.to_int (Uchar.utf_decode_uchar udecode) in
     Buffer.add_string strbuf (Printf.sprintf "\\u{%X}" code);
-    escape_string yyrecord strbuf
+    escape_string st strbuf
 
 
-and yy151 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_string strbuf "\\b"; escape_string yyrecord strbuf
+and yy57 (st : simple_state) (strbuf : Buffer.t) : string =
+  Buffer.add_string strbuf "\\b"; escape_string st strbuf
 
-and yy152 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_string strbuf "\\t"; escape_string yyrecord strbuf
+and yy58 (st : simple_state) (strbuf : Buffer.t) : string =
+  Buffer.add_string strbuf "\\t"; escape_string st strbuf
 
-and yy153 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_string strbuf "\\n"; escape_string yyrecord strbuf
+and yy59 (st : simple_state) (strbuf : Buffer.t) : string =
+  Buffer.add_string strbuf "\\n"; escape_string st strbuf
 
-and yy154 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
+and yy60 (st : simple_state) (strbuf : Buffer.t) : string =
   
-    add_lexeme_substring yyrecord strbuf;
-    escape_string yyrecord strbuf
+    add_lexeme_substring st strbuf;
+    escape_string st strbuf
 
 
-and yy155 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_string strbuf "\\f"; escape_string yyrecord strbuf
+and yy61 (st : simple_state) (strbuf : Buffer.t) : string =
+  Buffer.add_string strbuf "\\f"; escape_string st strbuf
 
-and yy156 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_string strbuf "\\r"; escape_string yyrecord strbuf
+and yy62 (st : simple_state) (strbuf : Buffer.t) : string =
+  Buffer.add_string strbuf "\\r"; escape_string st strbuf
 
-and yy157 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_string strbuf "\\\""; escape_string yyrecord strbuf
+and yy63 (st : simple_state) (strbuf : Buffer.t) : string =
+  Buffer.add_string strbuf "\\\""; escape_string st strbuf
 
-and yy158 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  Buffer.add_string strbuf "\\\\"; escape_string yyrecord strbuf
+and yy64 (st : simple_state) (strbuf : Buffer.t) : string =
+  Buffer.add_string strbuf "\\\\"; escape_string st strbuf
 
-and yy159 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  (yy160 [@tailcall]) yyrecord strbuf
+and yy65 (st : simple_state) (strbuf : Buffer.t) : string =
+  (yy66 [@tailcall]) st strbuf
 
-and yy160 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  malformed_utf8 ()
+and yy66 (st : simple_state) (strbuf : Buffer.t) : string =
+  failwith "Malformed UTF-8"
 
-and yy161 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy67 (st : simple_state) (strbuf : Buffer.t) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy154 [@tailcall]) yyrecord strbuf
-    | _ -> (yy160 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy60 [@tailcall]) st strbuf
+    | _ -> (yy66 [@tailcall]) st strbuf
 
-and yy162 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy68 (st : simple_state) (strbuf : Buffer.t) : string =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy170 [@tailcall]) yyrecord strbuf
-    | _ -> (yy160 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy76 [@tailcall]) st strbuf
+    | _ -> (yy66 [@tailcall]) st strbuf
 
-and yy163 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy69 (st : simple_state) (strbuf : Buffer.t) : string =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy170 [@tailcall]) yyrecord strbuf
-    | _ -> (yy160 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy76 [@tailcall]) st strbuf
+    | _ -> (yy66 [@tailcall]) st strbuf
 
-and yy164 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy70 (st : simple_state) (strbuf : Buffer.t) : string =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy172 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy78 [@tailcall]) st strbuf
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy173 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy79 [@tailcall]) st strbuf
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy170 [@tailcall]) yyrecord strbuf
-    | _ -> (yy160 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy76 [@tailcall]) st strbuf
+    | _ -> (yy66 [@tailcall]) st strbuf
 
-and yy165 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy71 (st : simple_state) (strbuf : Buffer.t) : string =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy170 [@tailcall]) yyrecord strbuf
-    | _ -> (yy160 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy76 [@tailcall]) st strbuf
+    | _ -> (yy66 [@tailcall]) st strbuf
 
-and yy166 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy72 (st : simple_state) (strbuf : Buffer.t) : string =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy170 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy76 [@tailcall]) st strbuf
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy174 [@tailcall]) yyrecord strbuf
-    | _ -> (yy160 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy80 [@tailcall]) st strbuf
+    | _ -> (yy66 [@tailcall]) st strbuf
 
-and yy167 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy73 (st : simple_state) (strbuf : Buffer.t) : string =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy175 [@tailcall]) yyrecord strbuf
-    | _ -> (yy160 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy81 [@tailcall]) st strbuf
+    | _ -> (yy66 [@tailcall]) st strbuf
 
-and yy168 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy74 (st : simple_state) (strbuf : Buffer.t) : string =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy175 [@tailcall]) yyrecord strbuf
-    | _ -> (yy160 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy81 [@tailcall]) st strbuf
+    | _ -> (yy66 [@tailcall]) st strbuf
 
-and yy169 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy75 (st : simple_state) (strbuf : Buffer.t) : string =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy175 [@tailcall]) yyrecord strbuf
-    | _ -> (yy160 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy81 [@tailcall]) st strbuf
+    | _ -> (yy66 [@tailcall]) st strbuf
 
-and yy170 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy76 (st : simple_state) (strbuf : Buffer.t) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy154 [@tailcall]) yyrecord strbuf
-    | _ -> (yy171 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy60 [@tailcall]) st strbuf
+    | _ -> (yy77 [@tailcall]) st strbuf
 
-and yy171 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  (yy160 [@tailcall]) yyrecord strbuf
+and yy77 (st : simple_state) (strbuf : Buffer.t) : string =
+  st.yycursor <- st.yymarker;
+  (yy66 [@tailcall]) st strbuf
 
-and yy172 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy78 (st : simple_state) (strbuf : Buffer.t) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8D'
     | '\x90'..'\xA9'
     | '\xAF'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy154 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy60 [@tailcall]) st strbuf
     | '\x8E'..'\x8F'
     | '\xAA'..'\xAE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy150 [@tailcall]) yyrecord strbuf
-    | _ -> (yy171 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy56 [@tailcall]) st strbuf
+    | _ -> (yy77 [@tailcall]) st strbuf
 
-and yy173 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy79 (st : simple_state) (strbuf : Buffer.t) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA5'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy154 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy60 [@tailcall]) st strbuf
     | '\xA6'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy150 [@tailcall]) yyrecord strbuf
-    | _ -> (yy171 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy56 [@tailcall]) st strbuf
+    | _ -> (yy77 [@tailcall]) st strbuf
 
-and yy174 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy80 (st : simple_state) (strbuf : Buffer.t) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy154 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy60 [@tailcall]) st strbuf
     | '\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy150 [@tailcall]) yyrecord strbuf
-    | _ -> (yy171 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy56 [@tailcall]) st strbuf
+    | _ -> (yy77 [@tailcall]) st strbuf
 
-and yy175 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy81 (st : simple_state) (strbuf : Buffer.t) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy170 [@tailcall]) yyrecord strbuf
-    | _ -> (yy171 [@tailcall]) yyrecord strbuf
+      st.yycursor <- st.yycursor + 1;
+      (yy76 [@tailcall]) st strbuf
+    | _ -> (yy77 [@tailcall]) st strbuf
 
-and yy176 (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
+and yy82 (st : simple_state) (strbuf : Buffer.t) : string =
   Buffer.contents strbuf
 
-and escape_string_body (yyrecord : simple_yyrecord) (strbuf : Buffer.t) : string =
-  (yy149 [@tailcall]) yyrecord strbuf
+and escape_string_body (st : simple_state) (strbuf : Buffer.t) : string =
+  (yy55 [@tailcall]) st strbuf
 
 
 
-and escape_string yyrecord strbuf =
-  yyrecord.yystart <- yyrecord.yycursor;
-  escape_string_body yyrecord strbuf
+and escape_string st strbuf =
+  st.yystart <- st.yycursor;
+  escape_string_body st strbuf
 
-let resolve_escapes str =
-  resolve_escapes (make_yyrecord ~info:() str) (Buffer.create 32)
-
-let skip_whitespace_line ?(offset = 0) str =
-  skip_whitespace_line (make_yyrecord ~offset ~info:() str)
-
-let is_fully_whitespace = function
-  | "" -> true
-  | str -> is_fully_whitespace (make_yyrecord ~info:() str)
-
-let is_valid_ident str = is_valid_ident (make_yyrecord ~info:() str)
+let is_valid_ident str = is_valid_ident (make_st ~info:() str)
 [@@inline]
 
 let escape_string = function
   | "" as empty -> empty
-  | str -> escape_string (make_yyrecord ~info:() str) (Buffer.create 32)
-
-let[@inline] check_hashlen ~exp (got : int) =
-  if got > exp then
-    error (sprintf "Expected %d hash symbol(s), got %d" exp got)
-  else got = exp
-
-let dedent str =
-  let strlen = String.length str in
-  if strlen < 1 || str.[0] <> '\n' then
-    error "A multiline string must start with newline";
-  let prefix =
-    let prefix_start = String.rindex str '\n' + 1 in
-    String.sub str prefix_start (strlen - prefix_start)
-  in
-  let prefix_len = String.length prefix in
-  if not (is_fully_whitespace prefix) then
-    error "Invalid multiline string: non-whitespace prefix";
-  let result = Buffer.create 32 in
-  (* Skip the first newline *)
-  let i = ref 1 in
-  let line_start = ref 1 in
-  (* Exclude prefix and the last newline *)
-  let limit = strlen - prefix_len - 1 in
-  while !i < limit do
-    let ch = String.unsafe_get str !i in
-    let line_i = !i - !line_start in
-    let old_i = !i in
-    if line_i = 0 then begin
-      (* If the line fully consists of any whitespace, we skip the contents
-         of it without prefix checks *)
-      let next_line_start = skip_whitespace_line ~offset:!i str in
-      (* -1 if the line contains content *)
-      if next_line_start >= 0 then begin
-        i := next_line_start;
-        line_start := next_line_start;
-        if next_line_start - 1 < limit then
-          Buffer.add_char result '\n'
-      end
-    end;
-    if !i = old_i then begin
-      if line_i < prefix_len then begin
-        (* Validating whitespace prefix *)
-        if ch <> String.unsafe_get prefix line_i then
-          error "Invalid multiline string: unmatched whitespace prefix"
-      end else begin
-        Buffer.add_char result ch;
-        if ch = '\n' then
-          line_start := !i + 1;
-      end;
-      incr i
-    end;
-  done;
-  Buffer.contents result
+  | str -> escape_string (make_st ~info:() str) (Buffer.create 32)
 
 
-let rec yy177 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+let rec yy83 (st : tokenizer_state) (depth : int) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\t'
     | '\x0E'..')'
     | '+'..'.'
     | '0'..'\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy202 [@tailcall]) yyrecord depth
+      if (st.yylimit <= st.yycursor) then (
+        (yy108 [@tailcall]) st depth
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy178 [@tailcall]) yyrecord depth
+        st.yycursor <- st.yycursor + 1;
+        (yy84 [@tailcall]) st depth
       )
     | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy180 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy86 [@tailcall]) st depth
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy182 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy88 [@tailcall]) st depth
     | '*' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy183 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy89 [@tailcall]) st depth
     | '/' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy184 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy90 [@tailcall]) st depth
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy187 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy93 [@tailcall]) st depth
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy188 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy94 [@tailcall]) st depth
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy189 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy95 [@tailcall]) st depth
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE'..'\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy190 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy96 [@tailcall]) st depth
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy191 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy97 [@tailcall]) st depth
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy192 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy98 [@tailcall]) st depth
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy193 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy99 [@tailcall]) st depth
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy194 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy100 [@tailcall]) st depth
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy195 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy101 [@tailcall]) st depth
     | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy185 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy91 [@tailcall]) st depth
 
-and yy178 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  (yy179 [@tailcall]) yyrecord depth
+and yy84 (st : tokenizer_state) (depth : int) : unit =
+  (yy85 [@tailcall]) st depth
 
-and yy179 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  multiline_comment yyrecord depth
+and yy85 (st : tokenizer_state) (depth : int) : unit =
+  multiline_comment st depth
 
-and yy180 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  (yy181 [@tailcall]) yyrecord depth
+and yy86 (st : tokenizer_state) (depth : int) : unit =
+  (yy87 [@tailcall]) st depth
 
-and yy181 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  newline yyrecord; multiline_comment yyrecord depth
+and yy87 (st : tokenizer_state) (depth : int) : unit =
+  newline st; multiline_comment st depth
 
-and yy182 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy88 (st : tokenizer_state) (depth : int) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy180 [@tailcall]) yyrecord depth
-    | _ -> (yy181 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy86 [@tailcall]) st depth
+    | _ -> (yy87 [@tailcall]) st depth
 
-and yy183 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy89 (st : tokenizer_state) (depth : int) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '/' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy196 [@tailcall]) yyrecord depth
-    | _ -> (yy179 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy102 [@tailcall]) st depth
+    | _ -> (yy85 [@tailcall]) st depth
 
-and yy184 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy90 (st : tokenizer_state) (depth : int) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '*' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy197 [@tailcall]) yyrecord depth
-    | _ -> (yy179 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy103 [@tailcall]) st depth
+    | _ -> (yy85 [@tailcall]) st depth
 
-and yy185 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  (yy186 [@tailcall]) yyrecord depth
+and yy91 (st : tokenizer_state) (depth : int) : unit =
+  (yy92 [@tailcall]) st depth
 
-and yy186 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  malformed_utf8 ()
+and yy92 (st : tokenizer_state) (depth : int) : unit =
+  malformed_utf8 st
 
-and yy187 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy93 (st : tokenizer_state) (depth : int) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy178 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy84 [@tailcall]) st depth
     | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy180 [@tailcall]) yyrecord depth
-    | _ -> (yy186 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy86 [@tailcall]) st depth
+    | _ -> (yy92 [@tailcall]) st depth
 
-and yy188 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy94 (st : tokenizer_state) (depth : int) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy178 [@tailcall]) yyrecord depth
-    | _ -> (yy186 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy84 [@tailcall]) st depth
+    | _ -> (yy92 [@tailcall]) st depth
 
-and yy189 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy95 (st : tokenizer_state) (depth : int) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy198 [@tailcall]) yyrecord depth
-    | _ -> (yy186 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy104 [@tailcall]) st depth
+    | _ -> (yy92 [@tailcall]) st depth
 
-and yy190 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy96 (st : tokenizer_state) (depth : int) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy198 [@tailcall]) yyrecord depth
-    | _ -> (yy186 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy104 [@tailcall]) st depth
+    | _ -> (yy92 [@tailcall]) st depth
 
-and yy191 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy97 (st : tokenizer_state) (depth : int) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy200 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy106 [@tailcall]) st depth
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy198 [@tailcall]) yyrecord depth
-    | _ -> (yy186 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy104 [@tailcall]) st depth
+    | _ -> (yy92 [@tailcall]) st depth
 
-and yy192 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy98 (st : tokenizer_state) (depth : int) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy198 [@tailcall]) yyrecord depth
-    | _ -> (yy186 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy104 [@tailcall]) st depth
+    | _ -> (yy92 [@tailcall]) st depth
 
-and yy193 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy99 (st : tokenizer_state) (depth : int) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy201 [@tailcall]) yyrecord depth
-    | _ -> (yy186 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy107 [@tailcall]) st depth
+    | _ -> (yy92 [@tailcall]) st depth
 
-and yy194 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy100 (st : tokenizer_state) (depth : int) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy201 [@tailcall]) yyrecord depth
-    | _ -> (yy186 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy107 [@tailcall]) st depth
+    | _ -> (yy92 [@tailcall]) st depth
 
-and yy195 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy101 (st : tokenizer_state) (depth : int) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy201 [@tailcall]) yyrecord depth
-    | _ -> (yy186 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy107 [@tailcall]) st depth
+    | _ -> (yy92 [@tailcall]) st depth
 
-and yy196 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  if depth <= 0 then () else multiline_comment yyrecord (depth - 1)
+and yy102 (st : tokenizer_state) (depth : int) : unit =
+  if depth <= 0 then () else multiline_comment st (depth - 1)
 
-and yy197 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  multiline_comment yyrecord (depth + 1)
+and yy103 (st : tokenizer_state) (depth : int) : unit =
+  multiline_comment st (depth + 1)
 
-and yy198 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy104 (st : tokenizer_state) (depth : int) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy178 [@tailcall]) yyrecord depth
-    | _ -> (yy199 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy84 [@tailcall]) st depth
+    | _ -> (yy105 [@tailcall]) st depth
 
-and yy199 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  (yy186 [@tailcall]) yyrecord depth
+and yy105 (st : tokenizer_state) (depth : int) : unit =
+  st.yycursor <- st.yymarker;
+  (yy92 [@tailcall]) st depth
 
-and yy200 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy106 (st : tokenizer_state) (depth : int) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA7'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy178 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy84 [@tailcall]) st depth
     | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy180 [@tailcall]) yyrecord depth
-    | _ -> (yy199 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy86 [@tailcall]) st depth
+    | _ -> (yy105 [@tailcall]) st depth
 
-and yy201 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy107 (st : tokenizer_state) (depth : int) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy198 [@tailcall]) yyrecord depth
-    | _ -> (yy199 [@tailcall]) yyrecord depth
+      st.yycursor <- st.yycursor + 1;
+      (yy104 [@tailcall]) st depth
+    | _ -> (yy105 [@tailcall]) st depth
 
-and yy202 (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  error "Unterminated comment"
+and yy108 (st : tokenizer_state) (depth : int) : unit =
+  error st "Unterminated comment"
 
-and multiline_comment (yyrecord : tokenizer_yyrecord) (depth : int) : unit =
-  (yy177 [@tailcall]) yyrecord depth
-
-
+and multiline_comment (st : tokenizer_state) (depth : int) : unit =
+  (yy83 [@tailcall]) st depth
 
 
-let rec yy203 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+
+
+let rec yy109 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\t'
     | '\x0E'..'\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy232 [@tailcall]) yyrecord
+      if (st.yylimit <= st.yycursor) then (
+        (yy138 [@tailcall]) st
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy204 [@tailcall]) yyrecord
+        st.yycursor <- st.yycursor + 1;
+        (yy110 [@tailcall]) st
       )
     | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy206 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy112 [@tailcall]) st
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy208 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy114 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy211 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy117 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy212 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy118 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy213 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy119 [@tailcall]) st
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE'..'\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy214 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy120 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy215 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy121 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy216 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy122 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy217 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy123 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy218 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy124 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy219 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy125 [@tailcall]) st
     | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy209 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy115 [@tailcall]) st
 
-and yy204 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy110 (st : tokenizer_state) : unit =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\t'
     | '\x0E'..'\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy205 [@tailcall]) yyrecord
+      if (st.yylimit <= st.yycursor) then (
+        (yy111 [@tailcall]) st
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy204 [@tailcall]) yyrecord
+        st.yycursor <- st.yycursor + 1;
+        (yy110 [@tailcall]) st
       )
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy220 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy126 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy222 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy128 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy223 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy129 [@tailcall]) st
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE'..'\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy224 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy130 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy225 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy131 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy226 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy132 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy227 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy133 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy228 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy134 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy229 [@tailcall]) yyrecord
-    | _ -> (yy205 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy135 [@tailcall]) st
+    | _ -> (yy111 [@tailcall]) st
 
-and yy205 (yyrecord : tokenizer_yyrecord) : unit =
-  singleline_comment yyrecord
+and yy111 (st : tokenizer_state) : unit =
+  singleline_comment st
 
-and yy206 (yyrecord : tokenizer_yyrecord) : unit =
-  (yy207 [@tailcall]) yyrecord
+and yy112 (st : tokenizer_state) : unit =
+  (yy113 [@tailcall]) st
 
-and yy207 (yyrecord : tokenizer_yyrecord) : unit =
-  newline yyrecord
+and yy113 (st : tokenizer_state) : unit =
+  newline st
 
-and yy208 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy114 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy206 [@tailcall]) yyrecord
-    | _ -> (yy207 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy112 [@tailcall]) st
+    | _ -> (yy113 [@tailcall]) st
 
-and yy209 (yyrecord : tokenizer_yyrecord) : unit =
-  (yy210 [@tailcall]) yyrecord
+and yy115 (st : tokenizer_state) : unit =
+  (yy116 [@tailcall]) st
 
-and yy210 (yyrecord : tokenizer_yyrecord) : unit =
-  malformed_utf8 ()
+and yy116 (st : tokenizer_state) : unit =
+  malformed_utf8 st
 
-and yy211 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy117 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy204 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy110 [@tailcall]) st
     | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy206 [@tailcall]) yyrecord
-    | _ -> (yy210 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy112 [@tailcall]) st
+    | _ -> (yy116 [@tailcall]) st
 
-and yy212 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy118 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy204 [@tailcall]) yyrecord
-    | _ -> (yy210 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy110 [@tailcall]) st
+    | _ -> (yy116 [@tailcall]) st
 
-and yy213 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy119 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy222 [@tailcall]) yyrecord
-    | _ -> (yy210 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy128 [@tailcall]) st
+    | _ -> (yy116 [@tailcall]) st
 
-and yy214 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy120 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy222 [@tailcall]) yyrecord
-    | _ -> (yy210 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy128 [@tailcall]) st
+    | _ -> (yy116 [@tailcall]) st
 
-and yy215 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy121 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy230 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy136 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy222 [@tailcall]) yyrecord
-    | _ -> (yy210 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy128 [@tailcall]) st
+    | _ -> (yy116 [@tailcall]) st
 
-and yy216 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy122 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy222 [@tailcall]) yyrecord
-    | _ -> (yy210 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy128 [@tailcall]) st
+    | _ -> (yy116 [@tailcall]) st
 
-and yy217 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy123 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy224 [@tailcall]) yyrecord
-    | _ -> (yy210 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy130 [@tailcall]) st
+    | _ -> (yy116 [@tailcall]) st
 
-and yy218 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy124 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy224 [@tailcall]) yyrecord
-    | _ -> (yy210 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy130 [@tailcall]) st
+    | _ -> (yy116 [@tailcall]) st
 
-and yy219 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy125 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy224 [@tailcall]) yyrecord
-    | _ -> (yy210 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy130 [@tailcall]) st
+    | _ -> (yy116 [@tailcall]) st
 
-and yy220 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy126 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy204 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy110 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy221 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  if (yyrecord.yyaccept == 0) then (yy205 [@tailcall]) yyrecord
-  else (yy210 [@tailcall]) yyrecord
+and yy127 (st : tokenizer_state) : unit =
+  st.yycursor <- st.yymarker;
+  if (st.yyaccept == 0) then (yy111 [@tailcall]) st
+  else (yy116 [@tailcall]) st
 
-and yy222 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy128 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy204 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy110 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy223 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy129 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy222 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy128 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy224 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy130 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy222 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy128 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy225 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy131 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy231 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy137 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy222 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy128 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy226 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy132 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy222 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy128 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy227 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy133 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy224 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy130 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy228 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy134 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy224 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy130 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy229 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy135 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy224 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy130 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy230 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy136 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA7'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy204 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy110 [@tailcall]) st
     | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy206 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy112 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy231 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy137 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA7'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy204 [@tailcall]) yyrecord
-    | _ -> (yy221 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy110 [@tailcall]) st
+    | _ -> (yy127 [@tailcall]) st
 
-and yy232 (yyrecord : tokenizer_yyrecord) : unit =
+and yy138 (st : tokenizer_state) : unit =
   ()
 
-and singleline_comment (yyrecord : tokenizer_yyrecord) : unit =
-  (yy203 [@tailcall]) yyrecord
+and singleline_comment (st : tokenizer_state) : unit =
+  (yy109 [@tailcall]) st
 
 
 
 
-let rec yy233 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+let rec yy139 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\b'
     | '\x0E'..'\x1F'
     | '!'..'.'
     | '0'..'\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy270 [@tailcall]) yyrecord
+      if (st.yylimit <= st.yycursor) then (
+        (yy176 [@tailcall]) st
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy234 [@tailcall]) yyrecord
+        st.yycursor <- st.yycursor + 1;
+        (yy140 [@tailcall]) st
       )
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
     | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy238 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy144 [@tailcall]) st
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy240 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy146 [@tailcall]) st
     | '/' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy241 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy147 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy244 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy150 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy245 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy151 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy246 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy152 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy247 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy153 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy248 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy154 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy249 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy155 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy250 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy156 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy251 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy157 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy252 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy158 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy253 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy159 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy254 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy160 [@tailcall]) st
     | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy242 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy148 [@tailcall]) st
 
-and yy234 (yyrecord : tokenizer_yyrecord) : unit =
-  (yy235 [@tailcall]) yyrecord
+and yy140 (st : tokenizer_state) : unit =
+  (yy141 [@tailcall]) st
 
-and yy235 (yyrecord : tokenizer_yyrecord) : unit =
+and yy141 (st : tokenizer_state) : unit =
   
-    error @@ sprintf "Illegal character '%s' after the '\\' line continuation"
-      (lexeme yyrecord)
+    error st @@
+      sprintf "Illegal character '%s' after the '\\' line continuation" (lexeme st)
 
 
-and yy236 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy142 (st : tokenizer_state) : unit =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy255 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy161 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy257 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy163 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy258 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy164 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy259 [@tailcall]) yyrecord
-    | _ -> (yy237 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy165 [@tailcall]) st
+    | _ -> (yy143 [@tailcall]) st
 
-and yy237 (yyrecord : tokenizer_yyrecord) : unit =
-  line_cont yyrecord
+and yy143 (st : tokenizer_state) : unit =
+  line_cont st
 
-and yy238 (yyrecord : tokenizer_yyrecord) : unit =
-  (yy239 [@tailcall]) yyrecord
+and yy144 (st : tokenizer_state) : unit =
+  (yy145 [@tailcall]) st
 
-and yy239 (yyrecord : tokenizer_yyrecord) : unit =
-  newline yyrecord
+and yy145 (st : tokenizer_state) : unit =
+  newline st
 
-and yy240 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy146 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy238 [@tailcall]) yyrecord
-    | _ -> (yy239 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy144 [@tailcall]) st
+    | _ -> (yy145 [@tailcall]) st
 
-and yy241 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy147 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '*' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy260 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy166 [@tailcall]) st
     | '/' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy261 [@tailcall]) yyrecord
-    | _ -> (yy235 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy167 [@tailcall]) st
+    | _ -> (yy141 [@tailcall]) st
 
-and yy242 (yyrecord : tokenizer_yyrecord) : unit =
-  (yy243 [@tailcall]) yyrecord
+and yy148 (st : tokenizer_state) : unit =
+  (yy149 [@tailcall]) st
 
-and yy243 (yyrecord : tokenizer_yyrecord) : unit =
-  malformed_utf8 ()
+and yy149 (st : tokenizer_state) : unit =
+  malformed_utf8 st
 
-and yy244 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy150 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy234 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy140 [@tailcall]) st
     | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy238 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy144 [@tailcall]) st
     | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy245 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy151 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy234 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy140 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy246 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy152 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy262 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy168 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy247 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy153 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy262 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy168 [@tailcall]) st
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy263 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy169 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy248 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy154 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy264 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy170 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy265 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy171 [@tailcall]) st
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy262 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy168 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy249 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy155 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy263 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy169 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy262 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy168 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy250 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy156 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy262 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy168 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy251 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy157 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy262 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy168 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy252 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy158 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy266 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy172 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy253 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy159 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy266 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy172 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy254 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy160 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy266 [@tailcall]) yyrecord
-    | _ -> (yy243 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy172 [@tailcall]) st
+    | _ -> (yy149 [@tailcall]) st
 
-and yy255 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy161 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy256 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  if (yyrecord.yyaccept == 0) then (yy237 [@tailcall]) yyrecord
-  else (yy243 [@tailcall]) yyrecord
+and yy162 (st : tokenizer_state) : unit =
+  st.yycursor <- st.yymarker;
+  if (st.yyaccept == 0) then (yy143 [@tailcall]) st
+  else (yy149 [@tailcall]) st
 
-and yy257 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy163 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy267 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy173 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy258 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy164 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy268 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy174 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy269 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy175 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy259 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy165 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy267 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy173 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy260 (yyrecord : tokenizer_yyrecord) : unit =
-  multiline_comment yyrecord 0; line_cont yyrecord
+and yy166 (st : tokenizer_state) : unit =
+  multiline_comment st 0; line_cont st
 
-and yy261 (yyrecord : tokenizer_yyrecord) : unit =
-  singleline_comment yyrecord
+and yy167 (st : tokenizer_state) : unit =
+  singleline_comment st
 
-and yy262 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy168 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy234 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy140 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy263 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy169 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy234 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy140 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy264 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy170 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
     | '\x8B'..'\xA7'
     | '\xAA'..'\xAE'
     | '\xB0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy234 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy140 [@tailcall]) st
     | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy238 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy144 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy265 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy171 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy234 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy140 [@tailcall]) st
     | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy266 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy172 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy262 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy168 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy267 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy173 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy268 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy174 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy269 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy175 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy236 [@tailcall]) yyrecord
-    | _ -> (yy256 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy142 [@tailcall]) st
+    | _ -> (yy162 [@tailcall]) st
 
-and yy270 (yyrecord : tokenizer_yyrecord) : unit =
+and yy176 (st : tokenizer_state) : unit =
   ()
 
-and line_cont_body (yyrecord : tokenizer_yyrecord) : unit =
-  (yy233 [@tailcall]) yyrecord
+and line_cont_body (st : tokenizer_state) : unit =
+  (yy139 [@tailcall]) st
 
 
 
-and line_cont yyrecord =
-  yyrecord.yystart <- yyrecord.yycursor;
-  line_cont_body yyrecord
+and line_cont st = save_start_position st; line_cont_body st
 
 
-let rec yy271 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+let rec yy177 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\b'
     | '\x0E'..'\x1F'
-    | '\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy299 [@tailcall]) yyrecord exp_hashlen
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy210 [@tailcall]) st
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy272 [@tailcall]) yyrecord exp_hashlen
+        st.yyt1 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy178 [@tailcall]) st
       )
     | '\t'
-    | ' '..'!'
-    | '#'..'~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy273 [@tailcall]) yyrecord exp_hashlen
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
     | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy275 [@tailcall]) yyrecord exp_hashlen
+      st.yycursor <- st.yycursor + 1;
+      (yy181 [@tailcall]) st
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy277 [@tailcall]) yyrecord exp_hashlen
-    | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy278 [@tailcall]) yyrecord exp_hashlen
+      st.yycursor <- st.yycursor + 1;
+      (yy183 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy281 [@tailcall]) yyrecord exp_hashlen
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy186 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy282 [@tailcall]) yyrecord exp_hashlen
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy187 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy283 [@tailcall]) yyrecord exp_hashlen
-    | '\xE1'
-    | '\xE3'..'\xEC'
-    | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy284 [@tailcall]) yyrecord exp_hashlen
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy188 [@tailcall]) st
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy189 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy285 [@tailcall]) yyrecord exp_hashlen
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy190 [@tailcall]) st
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy191 [@tailcall]) st
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy192 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy286 [@tailcall]) yyrecord exp_hashlen
-    | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy287 [@tailcall]) yyrecord exp_hashlen
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy193 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy288 [@tailcall]) yyrecord exp_hashlen
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy194 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy289 [@tailcall]) yyrecord exp_hashlen
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy195 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy290 [@tailcall]) yyrecord exp_hashlen
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy196 [@tailcall]) st
     | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy279 [@tailcall]) yyrecord exp_hashlen
-
-and yy272 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  error "Illegal character"
-
-and yy273 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  (yy274 [@tailcall]) yyrecord exp_hashlen
-
-and yy274 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  
-    add_lexeme_substring yyrecord yyrecord.info.strbuf;
-    raw_string yyrecord exp_hashlen
-
-
-and yy275 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  (yy276 [@tailcall]) yyrecord exp_hashlen
-
-and yy276 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  newline yyrecord; error "Unterminated raw string"
-
-and yy277 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy275 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy276 [@tailcall]) yyrecord exp_hashlen
-
-and yy278 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '#' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy291 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy274 [@tailcall]) yyrecord exp_hashlen
-
-and yy279 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy280 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  malformed_utf8 ()
-
-and yy281 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy273 [@tailcall]) yyrecord exp_hashlen
-    | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy275 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy282 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy273 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy283 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy293 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy284 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy293 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy285 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy295 [@tailcall]) yyrecord exp_hashlen
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy296 [@tailcall]) yyrecord exp_hashlen
-    | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy293 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy286 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy293 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy287 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBA'
-    | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy293 [@tailcall]) yyrecord exp_hashlen
-    | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy297 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy288 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy298 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy289 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy298 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy290 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy298 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy291 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '#' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy291 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy292 [@tailcall]) yyrecord exp_hashlen
-
-and yy292 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
-  
-    let hashlen = yyrecord.yytr0 - yyrecord.yytl0 in
-    if check_hashlen ~exp:exp_hashlen hashlen then
-      RAW_STRING (Buffer.contents yyrecord.info.strbuf)
-    else begin
-      Buffer.add_string yyrecord.info.strbuf (lexeme yyrecord);
-      raw_string yyrecord exp_hashlen
-    end
-
-
-and yy293 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy273 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy294 [@tailcall]) yyrecord exp_hashlen
-
-and yy294 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  (yy280 [@tailcall]) yyrecord exp_hashlen
-
-and yy295 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8D'
-    | '\x90'..'\xA7'
-    | '\xAF'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy273 [@tailcall]) yyrecord exp_hashlen
-    | '\x8E'..'\x8F'
-    | '\xAA'..'\xAE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy272 [@tailcall]) yyrecord exp_hashlen
-    | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy275 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy294 [@tailcall]) yyrecord exp_hashlen
-
-and yy296 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xA5'
-    | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy273 [@tailcall]) yyrecord exp_hashlen
-    | '\xA6'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy272 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy294 [@tailcall]) yyrecord exp_hashlen
-
-and yy297 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy273 [@tailcall]) yyrecord exp_hashlen
-    | '\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy272 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy294 [@tailcall]) yyrecord exp_hashlen
-
-and yy298 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy293 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy294 [@tailcall]) yyrecord exp_hashlen
-
-and yy299 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  error "Unterminated raw string"
-
-and raw_string_body (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  (yy271 [@tailcall]) yyrecord exp_hashlen
-
-
-
-and raw_string yyrecord exp_hashlen =
-  yyrecord.yystart <- yyrecord.yycursor;
-  raw_string_body yyrecord exp_hashlen
-
-
-let rec yy300 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x00'
-    | '\x01'..'\b'
-    | '\x0E'..'\x1F'
-    | '\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy330 [@tailcall]) yyrecord exp_hashlen
-      ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy301 [@tailcall]) yyrecord exp_hashlen
-      )
-    | '\t'
-    | ' '..'!'
-    | '#'..'~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy302 [@tailcall]) yyrecord exp_hashlen
-    | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy304 [@tailcall]) yyrecord exp_hashlen
-    | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy306 [@tailcall]) yyrecord exp_hashlen
-    | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy307 [@tailcall]) yyrecord exp_hashlen
-    | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy310 [@tailcall]) yyrecord exp_hashlen
-    | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy311 [@tailcall]) yyrecord exp_hashlen
-    | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy312 [@tailcall]) yyrecord exp_hashlen
-    | '\xE1'
-    | '\xE3'..'\xEC'
-    | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy313 [@tailcall]) yyrecord exp_hashlen
-    | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy314 [@tailcall]) yyrecord exp_hashlen
-    | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy315 [@tailcall]) yyrecord exp_hashlen
-    | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy316 [@tailcall]) yyrecord exp_hashlen
-    | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy317 [@tailcall]) yyrecord exp_hashlen
-    | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy318 [@tailcall]) yyrecord exp_hashlen
-    | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy319 [@tailcall]) yyrecord exp_hashlen
-    | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy308 [@tailcall]) yyrecord exp_hashlen
-
-and yy301 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  error "Illegal character"
-
-and yy302 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  (yy303 [@tailcall]) yyrecord exp_hashlen
-
-and yy303 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  
-    add_lexeme_substring yyrecord yyrecord.info.strbuf;
-    raw_string_multiline yyrecord exp_hashlen
-
-
-and yy304 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  (yy305 [@tailcall]) yyrecord exp_hashlen
-
-and yy305 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  
-    newline yyrecord;
-    (* Any newline is normalized to \n *)
-    Buffer.add_char yyrecord.info.strbuf '\n';
-    raw_string_multiline yyrecord exp_hashlen
-
-
-and yy306 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy304 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy305 [@tailcall]) yyrecord exp_hashlen
-
-and yy307 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy320 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy303 [@tailcall]) yyrecord exp_hashlen
-
-and yy308 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy309 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  malformed_utf8 ()
-
-and yy310 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy302 [@tailcall]) yyrecord exp_hashlen
-    | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy304 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy311 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy302 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy312 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy322 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy313 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy322 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy314 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy323 [@tailcall]) yyrecord exp_hashlen
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy324 [@tailcall]) yyrecord exp_hashlen
-    | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy322 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy315 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy322 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy316 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBA'
-    | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy322 [@tailcall]) yyrecord exp_hashlen
-    | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy325 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy317 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy326 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy318 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy326 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy319 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy326 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy320 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy327 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy321 [@tailcall]) yyrecord exp_hashlen
-
-and yy321 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  if (yyrecord.yyaccept == 0) then (yy303 [@tailcall]) yyrecord exp_hashlen
-  else (yy309 [@tailcall]) yyrecord exp_hashlen
-
-and yy322 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy302 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy321 [@tailcall]) yyrecord exp_hashlen
-
-and yy323 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\x8D'
-    | '\x90'..'\xA7'
-    | '\xAF'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy302 [@tailcall]) yyrecord exp_hashlen
-    | '\x8E'..'\x8F'
-    | '\xAA'..'\xAE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy301 [@tailcall]) yyrecord exp_hashlen
-    | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy304 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy321 [@tailcall]) yyrecord exp_hashlen
-
-and yy324 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xA5'
-    | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy302 [@tailcall]) yyrecord exp_hashlen
-    | '\xA6'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy301 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy321 [@tailcall]) yyrecord exp_hashlen
-
-and yy325 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy302 [@tailcall]) yyrecord exp_hashlen
-    | '\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy301 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy321 [@tailcall]) yyrecord exp_hashlen
-
-and yy326 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy322 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy321 [@tailcall]) yyrecord exp_hashlen
-
-and yy327 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '#' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy328 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy321 [@tailcall]) yyrecord exp_hashlen
-
-and yy328 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '#' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy328 [@tailcall]) yyrecord exp_hashlen
-    | _ -> (yy329 [@tailcall]) yyrecord exp_hashlen
-
-and yy329 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
-  
-    let hashlen = yyrecord.yytr0 - yyrecord.yytl0 in
-    if check_hashlen ~exp:exp_hashlen hashlen then
-      RAW_STRING (dedent (Buffer.contents yyrecord.info.strbuf))
-    else begin
-      Buffer.add_string yyrecord.info.strbuf (lexeme yyrecord);
-      raw_string_multiline yyrecord exp_hashlen
-    end
-
-
-and yy330 (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  error "Unterminated multiline raw string"
-
-and raw_string_multiline_body (yyrecord : tokenizer_yyrecord) (exp_hashlen : int) : token =
-  (yy300 [@tailcall]) yyrecord exp_hashlen
-
-
-
-and raw_string_multiline yyrecord exp_hashlen =
-  yyrecord.yystart <- yyrecord.yycursor;
-  raw_string_multiline_body yyrecord exp_hashlen
-
-
-let rec yy331 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+      st.yycursor <- st.yycursor + 1;
+      (yy184 [@tailcall]) st
+
+and yy178 (st : tokenizer_state) : unit =
+  st.yycursor <- st.yyt1;
+  ()
+
+and yy179 (st : tokenizer_state) : unit =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy334 [@tailcall]) yyrecord
-    | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy336 [@tailcall]) yyrecord
-    | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy338 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy339 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy197 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy340 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy199 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy341 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy200 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy342 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy201 [@tailcall]) st
+    | _ -> (yy180 [@tailcall]) st
+
+and yy180 (st : tokenizer_state) : unit =
+  whitespace_escape st
+
+and yy181 (st : tokenizer_state) : unit =
+  (yy182 [@tailcall]) st
+
+and yy182 (st : tokenizer_state) : unit =
+  newline st; whitespace_escape st
+
+and yy183 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy181 [@tailcall]) st
+    | _ -> (yy182 [@tailcall]) st
+
+and yy184 (st : tokenizer_state) : unit =
+  (yy185 [@tailcall]) st
+
+and yy185 (st : tokenizer_state) : unit =
+  malformed_utf8 st
+
+and yy186 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\x9F'
+    | '\xA1'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy178 [@tailcall]) st
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy181 [@tailcall]) st
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy187 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy178 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy188 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy202 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy189 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy202 [@tailcall]) st
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy203 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy190 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy204 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy205 [@tailcall]) st
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy202 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy191 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy203 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy202 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy192 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy202 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy193 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy202 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy194 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy206 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy195 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy206 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy196 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy206 [@tailcall]) st
+    | _ -> (yy185 [@tailcall]) st
+
+and yy197 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy198 (st : tokenizer_state) : unit =
+  st.yycursor <- st.yymarker;
+  if (st.yyaccept == 0) then (yy180 [@tailcall]) st
+  else (yy185 [@tailcall]) st
+
+and yy199 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy207 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy200 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy208 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy209 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy201 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy207 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy202 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy178 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy203 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy178 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy204 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
+    | '\x8B'..'\xA7'
+    | '\xAA'..'\xAE'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy178 [@tailcall]) st
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy181 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy205 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy178 [@tailcall]) st
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy206 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy202 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy207 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy208 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy209 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy179 [@tailcall]) st
+    | _ -> (yy198 [@tailcall]) st
+
+and yy210 (st : tokenizer_state) : unit =
+  ()
+
+and whitespace_escape (st : tokenizer_state) : unit =
+  (yy177 [@tailcall]) st
+
+
+
+
+let rec yy211 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\n'..'\x0C' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy214 [@tailcall]) st
+    | '\r' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy216 [@tailcall]) st
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy217 [@tailcall]) st
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy218 [@tailcall]) st
     | _ ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy352 [@tailcall]) yyrecord
+      if (st.yylimit <= st.yycursor) then (
+        (yy221 [@tailcall]) st
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy332 [@tailcall]) yyrecord
+        st.yycursor <- st.yycursor + 1;
+        (yy212 [@tailcall]) st
       )
 
-and yy332 (yyrecord : tokenizer_yyrecord) : unit =
-  (yy333 [@tailcall]) yyrecord
+and yy212 (st : tokenizer_state) : unit =
+  (yy213 [@tailcall]) st
 
-and yy333 (yyrecord : tokenizer_yyrecord) : unit =
-  rollback yyrecord
+and yy213 (st : tokenizer_state) : unit =
+  error st "A multiline string must start with newline"
 
-and yy334 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy214 (st : tokenizer_state) : unit =
+  (yy215 [@tailcall]) st
+
+and yy215 (st : tokenizer_state) : unit =
+  st.yycursor <- st.yyt1;
+  ()
+
+and yy216 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy214 [@tailcall]) st
+    | _ -> (yy215 [@tailcall]) st
+
+and yy217 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy214 [@tailcall]) st
+    | _ -> (yy213 [@tailcall]) st
+
+and yy218 (st : tokenizer_state) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy219 [@tailcall]) st
+    | _ -> (yy213 [@tailcall]) st
+
+and yy219 (st : tokenizer_state) : unit =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy214 [@tailcall]) st
+    | _ -> (yy220 [@tailcall]) st
+
+and yy220 (st : tokenizer_state) : unit =
+  st.yycursor <- st.yymarker;
+  (yy213 [@tailcall]) st
+
+and yy221 (st : tokenizer_state) : unit =
+  error st "A multiline string must start with newline"
+
+and validate_multiline_start (st : tokenizer_state) : unit =
+  (yy211 [@tailcall]) st
+
+
+
+let validate_multiline_start st =
+  save_start_position st;
+  validate_multiline_start st
+
+
+let rec yy222 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\n'..'\x0C' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy225 [@tailcall]) st rollback_pos
+    | '\r' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy227 [@tailcall]) st rollback_pos
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy228 [@tailcall]) st rollback_pos
+    | '\\' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy229 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy230 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy231 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy273 [@tailcall]) st rollback_pos
+      ) else (
+        st.yycursor <- st.yycursor + 1;
+        (yy223 [@tailcall]) st rollback_pos
+      )
+
+and yy223 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  (yy224 [@tailcall]) st rollback_pos
+
+and yy224 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  detect_multiline_string_prefix st rollback_pos
+
+and yy225 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy334 [@tailcall]) yyrecord
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy232 [@tailcall]) st rollback_pos
+    | '"' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy234 [@tailcall]) st rollback_pos
+    | '\\' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy235 [@tailcall]) st rollback_pos
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy343 [@tailcall]) yyrecord
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy236 [@tailcall]) st rollback_pos
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy345 [@tailcall]) yyrecord
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy237 [@tailcall]) st rollback_pos
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy346 [@tailcall]) yyrecord
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy238 [@tailcall]) st rollback_pos
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy347 [@tailcall]) yyrecord
-    | _ -> (yy335 [@tailcall]) yyrecord
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy239 [@tailcall]) st rollback_pos
+    | _ -> (yy226 [@tailcall]) st rollback_pos
 
-and yy335 (yyrecord : tokenizer_yyrecord) : unit =
-  whitespace_escape yyrecord
+and yy226 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  newline st; detect_multiline_string_prefix st rollback_pos
 
-and yy336 (yyrecord : tokenizer_yyrecord) : unit =
-  (yy337 [@tailcall]) yyrecord
-
-and yy337 (yyrecord : tokenizer_yyrecord) : unit =
-  newline yyrecord; whitespace_escape yyrecord
-
-and yy338 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy227 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy232 [@tailcall]) st rollback_pos
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy336 [@tailcall]) yyrecord
-    | _ -> (yy337 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy225 [@tailcall]) st rollback_pos
+    | '"' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy234 [@tailcall]) st rollback_pos
+    | '\\' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy235 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy236 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy237 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy238 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy239 [@tailcall]) st rollback_pos
+    | _ -> (yy226 [@tailcall]) st rollback_pos
 
-and yy339 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy228 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy240 [@tailcall]) st rollback_pos
+    | _ -> (yy224 [@tailcall]) st rollback_pos
+
+and yy229 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy241 [@tailcall]) st rollback_pos
+    | '\n'..'\x0C' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy243 [@tailcall]) st rollback_pos
+    | '\r' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy245 [@tailcall]) st rollback_pos
+    | '"'
+    | '\\' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy246 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy247 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy248 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy249 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy250 [@tailcall]) st rollback_pos
+    | _ -> (yy224 [@tailcall]) st rollback_pos
+
+and yy230 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy336 [@tailcall]) yyrecord
-    | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy334 [@tailcall]) yyrecord
-    | _ -> (yy333 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy225 [@tailcall]) st rollback_pos
+    | _ -> (yy224 [@tailcall]) st rollback_pos
 
-and yy340 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy231 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy251 [@tailcall]) st rollback_pos
+    | _ -> (yy224 [@tailcall]) st rollback_pos
+
+and yy232 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy232 [@tailcall]) st rollback_pos
+    | '"' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy234 [@tailcall]) st rollback_pos
+    | '\\' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy235 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy236 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy237 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy238 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy239 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy233 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy226 [@tailcall]) st rollback_pos
+    | 1 -> (yy224 [@tailcall]) st rollback_pos
+    | _ -> (yy242 [@tailcall]) st rollback_pos
+
+and yy234 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy252 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy235 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '"' -> (yy233 [@tailcall]) st rollback_pos
+    | _ -> (yy254 [@tailcall]) st rollback_pos yych
+
+and yy236 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy232 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy237 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy348 [@tailcall]) yyrecord
-    | _ -> (yy333 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy259 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy341 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy238 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy349 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy260 [@tailcall]) st rollback_pos
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy350 [@tailcall]) yyrecord
-    | _ -> (yy333 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy261 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy342 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy239 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy348 [@tailcall]) yyrecord
-    | _ -> (yy333 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy259 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy343 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy240 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy262 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy241 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy241 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy263 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy248 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy264 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy250 [@tailcall]) st rollback_pos
+    | _ -> (yy242 [@tailcall]) st rollback_pos
+
+and yy242 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  whitespace_escape st; detect_multiline_string_prefix st rollback_pos
+
+and yy243 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  (yy244 [@tailcall]) st rollback_pos
+
+and yy244 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  
+    newline st;
+    whitespace_escape st;
+    detect_multiline_string_prefix st rollback_pos
+
+
+and yy245 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy243 [@tailcall]) st rollback_pos
+    | _ -> (yy244 [@tailcall]) st rollback_pos
+
+and yy246 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  detect_multiline_string_prefix st rollback_pos
+
+and yy247 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy243 [@tailcall]) st rollback_pos
     | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy334 [@tailcall]) yyrecord
-    | _ -> (yy344 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy241 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy344 (yyrecord : tokenizer_yyrecord) : unit =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  if (yyrecord.yyaccept == 0) then (yy335 [@tailcall]) yyrecord
-  else (yy333 [@tailcall]) yyrecord
-
-and yy345 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy248 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy348 [@tailcall]) yyrecord
-    | _ -> (yy344 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy265 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy346 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy249 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy351 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy266 [@tailcall]) st rollback_pos
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy350 [@tailcall]) yyrecord
-    | _ -> (yy344 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy267 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy347 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy250 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy348 [@tailcall]) yyrecord
-    | _ -> (yy344 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy265 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy348 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy251 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy225 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy252 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy268 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy253 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  (yy254 [@tailcall]) st rollback_pos yych
+
+and yy254 (st : tokenizer_state) (rollback_pos : Lexing.position) (yych : char) : string =
+  match yych with
+    | '\t'..'\r'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy253 [@tailcall]) st rollback_pos
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy234 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy255 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy256 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy257 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy258 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy255 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x85'
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy253 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy256 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy269 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy257 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy334 [@tailcall]) yyrecord
-    | _ -> (yy344 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy270 [@tailcall]) st rollback_pos
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy271 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy349 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy258 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy269 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy259 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy232 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy260 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy334 [@tailcall]) yyrecord
-    | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy336 [@tailcall]) yyrecord
-    | _ -> (yy344 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy232 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy350 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy261 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy334 [@tailcall]) yyrecord
-    | _ -> (yy344 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy232 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy351 (yyrecord : tokenizer_yyrecord) : unit =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy262 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  
+    st.yystart <- st.info.start_bol;
+    error st "Invalid multiline string: non-whitespace prefix"
+
+
+and yy263 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy241 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy264 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy272 [@tailcall]) st rollback_pos
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy267 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy265 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy241 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy266 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy334 [@tailcall]) yyrecord
-    | _ -> (yy344 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy241 [@tailcall]) st rollback_pos
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy243 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and yy352 (yyrecord : tokenizer_yyrecord) : unit =
-  ()
+and yy267 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy241 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
 
-and whitespace_escape_body (yyrecord : tokenizer_yyrecord) : unit =
-  (yy331 [@tailcall]) yyrecord
+and yy268 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.t1 <- st.yyt1;
+  st.t2 <- st.yyt2;
+  
+    rollback_to st rollback_pos;
+    sub st st.t1 st.t2
+
+
+and yy269 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy253 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy270 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xA8'..'\xA9'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy253 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy271 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy253 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy272 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy241 [@tailcall]) st rollback_pos
+    | _ -> (yy233 [@tailcall]) st rollback_pos
+
+and yy273 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  error st "Unterminated multiline string"
+
+and detect_multiline_string_prefix_body (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  (yy222 [@tailcall]) st rollback_pos
 
 
 
-and whitespace_escape yyrecord =
-  yyrecord.yystart <- yyrecord.yycursor;
-  whitespace_escape_body yyrecord
+and detect_multiline_string_prefix st rollback_pos =
+  save_start_position st;
+  detect_multiline_string_prefix_body st rollback_pos
 
 
-let rec yy353 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+let rec yy274 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\n'..'\x0C' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy277 [@tailcall]) st exp_hashlen rollback_pos
+    | '\r' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy279 [@tailcall]) st exp_hashlen rollback_pos
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy280 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy281 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy282 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy302 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        st.yycursor <- st.yycursor + 1;
+        (yy275 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy275 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  (yy276 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy276 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
+
+and yy277 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy283 [@tailcall]) st exp_hashlen rollback_pos
+    | '"' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy285 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy286 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy287 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy288 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy289 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy278 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy278 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  newline st; detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
+
+and yy279 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy283 [@tailcall]) st exp_hashlen rollback_pos
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy277 [@tailcall]) st exp_hashlen rollback_pos
+    | '"' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy285 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy286 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy287 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy288 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy289 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy278 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy280 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy290 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy276 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy281 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy277 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy276 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy282 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy291 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy276 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy283 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy283 [@tailcall]) st exp_hashlen rollback_pos
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy285 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy286 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy287 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy288 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy289 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy284 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yycursor <- st.yymarker;
+  if (st.yyaccept == 0) then (yy278 [@tailcall]) st exp_hashlen rollback_pos
+  else (yy276 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy285 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy292 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy286 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy283 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy287 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy293 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy288 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy294 [@tailcall]) st exp_hashlen rollback_pos
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy295 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy289 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy293 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy290 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy296 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy291 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy277 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy292 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy297 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy293 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy283 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy294 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy283 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy295 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy283 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy296 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '#' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy298 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy297 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '#' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy300 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy284 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy298 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '#' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy298 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy299 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy299 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.t1 <- st.yyt1;
+  
+    if st.yycursor - st.t1 >= exp_hashlen then begin
+      st.yystart <- st.info.start_bol;
+      error st "Invalid multiline string: non-whitespace prefix"
+    end else detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
+
+
+and yy300 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '#' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy300 [@tailcall]) st exp_hashlen rollback_pos
+    | _ -> (yy301 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy301 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.t1 <- st.yyt1;
+  st.t3 <- st.yyt2;
+  st.t2 <- st.yyt2;
+  st.t2 <- st.t2 - 3;
+  
+    if st.yycursor - st.t3 >= exp_hashlen then begin
+      rollback_to st rollback_pos;
+      sub st st.t1 st.t2
+    end else detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
+
+
+and yy302 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  error st "Unterminated raw multiline string"
+
+and detect_raw_multiline_string_prefix_body (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  (yy274 [@tailcall]) st exp_hashlen rollback_pos
+
+
+
+and detect_raw_multiline_string_prefix st exp_hashlen rollback_pos =
+  save_start_position st;
+  detect_raw_multiline_string_prefix_body st exp_hashlen rollback_pos
+
+let multiline_prefix_check st prefix =
+  let { t1; t2; yyinput; _ } = st in
+  newline ~pos:t1 st;
+  let ws_len = t2 - t1 in
+  for i = t1 to t1 + String.length prefix - 1 do
+    let ch = peek yyinput i in
+    let prefix_i = i - t1 in
+    if i >= t2 || ch != String.get prefix prefix_i then
+      error st "Invalid multiline string: unmatched whitespace prefix"
+  done;
+  Buffer.add_char st.info.strbuf '\n';
+  let rest_len = ws_len - String.length prefix in
+  let rest_start = t1 + String.length prefix in
+  if rest_len > 0 then
+    Buffer.add_substring st.info.strbuf yyinput rest_start rest_len
+
+let multiline_contents strbuf =
+  let len = Buffer.length strbuf in
+  (* Strip the first and the last \n *)
+  if len <= 1 then "" else Buffer.sub strbuf 1 (len - 2)
+
+
+let rec yy304 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\b'
     | '\x0E'..'\x1F'
     | '\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy420 [@tailcall]) yyrecord
+      if (st.yylimit <= st.yycursor) then (
+        (yy393 [@tailcall]) st prefix
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy354 [@tailcall]) yyrecord
+        st.yycursor <- st.yycursor + 1;
+        (yy305 [@tailcall]) st prefix
       )
     | '\t'
     | ' '..'!'
     | '#'..'['
     | ']'..'~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy355 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy306 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy357 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy308 [@tailcall]) st prefix
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy359 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy310 [@tailcall]) st prefix
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy360 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy311 [@tailcall]) st prefix
     | '\\' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy361 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy312 [@tailcall]) st prefix
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy364 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy315 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy365 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy316 [@tailcall]) st prefix
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy366 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy317 [@tailcall]) st prefix
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy367 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy318 [@tailcall]) st prefix
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy368 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy319 [@tailcall]) st prefix
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy369 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy320 [@tailcall]) st prefix
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy370 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy321 [@tailcall]) st prefix
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy371 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy322 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy372 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy323 [@tailcall]) st prefix
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy373 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy324 [@tailcall]) st prefix
     | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy362 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy313 [@tailcall]) st prefix
 
-and yy354 (yyrecord : tokenizer_yyrecord) : token =
-  error "Illegal character"
+and yy305 (st : tokenizer_state) (prefix : string) : token =
+  error st "Illegal character"
 
-and yy355 (yyrecord : tokenizer_yyrecord) : token =
-  (yy356 [@tailcall]) yyrecord
+and yy306 (st : tokenizer_state) (prefix : string) : token =
+  (yy307 [@tailcall]) st prefix
 
-and yy356 (yyrecord : tokenizer_yyrecord) : token =
-  add_lexeme_substring yyrecord yyrecord.info.strbuf; string yyrecord
+and yy307 (st : tokenizer_state) (prefix : string) : token =
+  add_lexeme_substring st st.info.strbuf; yyfnmulti' st prefix
 
-and yy357 (yyrecord : tokenizer_yyrecord) : token =
-  (yy358 [@tailcall]) yyrecord
-
-and yy358 (yyrecord : tokenizer_yyrecord) : token =
-  newline yyrecord; error "Unterminated string"
-
-and yy359 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy308 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy309 [@tailcall]) st prefix
+      ) else (
+        st.yyt1 <- st.yycursor;
+        st.yyt2 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy325 [@tailcall]) st prefix
+      )
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st prefix
+    | '\n'..'\x0C' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy328 [@tailcall]) st prefix
+    | '\r' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy330 [@tailcall]) st prefix
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy331 [@tailcall]) st prefix
+    | '\xC3'..'\xDF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
+    | '\xE0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy333 [@tailcall]) st prefix
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy334 [@tailcall]) st prefix
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy335 [@tailcall]) st prefix
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy336 [@tailcall]) st prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy337 [@tailcall]) st prefix
+    | '\xED' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy338 [@tailcall]) st prefix
+    | '\xF0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy339 [@tailcall]) st prefix
+    | '\xF1'..'\xF3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy340 [@tailcall]) st prefix
+    | '\xF4' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy341 [@tailcall]) st prefix
+    | _ -> (yy309 [@tailcall]) st prefix
+
+and yy309 (st : tokenizer_state) (prefix : string) : token =
+  newline st; yyfnmulti' st prefix
+
+and yy310 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy309 [@tailcall]) st prefix
+      ) else (
+        st.yyt1 <- st.yycursor;
+        st.yyt2 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy325 [@tailcall]) st prefix
+      )
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st prefix
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy357 [@tailcall]) yyrecord
-    | _ -> (yy358 [@tailcall]) yyrecord
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy342 [@tailcall]) st prefix
+    | '\x0B'..'\x0C' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy328 [@tailcall]) st prefix
+    | '\r' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy330 [@tailcall]) st prefix
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy331 [@tailcall]) st prefix
+    | '\xC3'..'\xDF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
+    | '\xE0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy333 [@tailcall]) st prefix
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy334 [@tailcall]) st prefix
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy335 [@tailcall]) st prefix
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy336 [@tailcall]) st prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy337 [@tailcall]) st prefix
+    | '\xED' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy338 [@tailcall]) st prefix
+    | '\xF0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy339 [@tailcall]) st prefix
+    | '\xF1'..'\xF3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy340 [@tailcall]) st prefix
+    | '\xF4' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy341 [@tailcall]) st prefix
+    | _ -> (yy309 [@tailcall]) st prefix
 
-and yy360 (yyrecord : tokenizer_yyrecord) : token =
-  QUOTED_STRING (Buffer.contents yyrecord.info.strbuf)
+and yy311 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy343 [@tailcall]) st prefix
+    | _ -> (yy307 [@tailcall]) st prefix
 
-and yy361 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy312 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\b'
@@ -3997,1099 +3734,2843 @@ and yy361 (yyrecord : tokenizer_yyrecord) : token =
     | 'g'..'m'
     | 'o'..'q'
     | 'v'..'\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy356 [@tailcall]) yyrecord
+      if (st.yylimit <= st.yycursor) then (
+        (yy307 [@tailcall]) st prefix
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy374 [@tailcall]) yyrecord
+        st.yycursor <- st.yycursor + 1;
+        (yy344 [@tailcall]) st prefix
       )
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy378 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy348 [@tailcall]) st prefix
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy380 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy350 [@tailcall]) st prefix
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy381 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy351 [@tailcall]) st prefix
     | '\\' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy382 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy352 [@tailcall]) st prefix
     | 'b' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy383 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy353 [@tailcall]) st prefix
     | 'f' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy384 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy354 [@tailcall]) st prefix
     | 'n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy385 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy355 [@tailcall]) st prefix
     | 'r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy386 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy356 [@tailcall]) st prefix
     | 's' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy387 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy357 [@tailcall]) st prefix
     | 't' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy388 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy358 [@tailcall]) st prefix
     | 'u' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy389 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy359 [@tailcall]) st prefix
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy390 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy360 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy392 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy361 [@tailcall]) st prefix
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy393 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy362 [@tailcall]) st prefix
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy394 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy363 [@tailcall]) st prefix
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy395 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy364 [@tailcall]) st prefix
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy396 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy365 [@tailcall]) st prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy397 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy366 [@tailcall]) st prefix
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy398 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy367 [@tailcall]) st prefix
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy399 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy368 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy400 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy369 [@tailcall]) st prefix
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy401 [@tailcall]) yyrecord
-    | _ -> (yy356 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy370 [@tailcall]) st prefix
+    | _ -> (yy307 [@tailcall]) st prefix
 
-and yy362 (yyrecord : tokenizer_yyrecord) : token =
-  (yy363 [@tailcall]) yyrecord
+and yy313 (st : tokenizer_state) (prefix : string) : token =
+  (yy314 [@tailcall]) st prefix
 
-and yy363 (yyrecord : tokenizer_yyrecord) : token =
-  malformed_utf8 ()
+and yy314 (st : tokenizer_state) (prefix : string) : token =
+  malformed_utf8 st
 
-and yy364 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy315 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy355 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy306 [@tailcall]) st prefix
     | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy357 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy308 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy365 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy316 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy355 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy306 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy366 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy317 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy402 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy371 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy367 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy318 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy402 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy371 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy368 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy319 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy403 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy372 [@tailcall]) st prefix
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy404 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy373 [@tailcall]) st prefix
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy402 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy371 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy369 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy320 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy402 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy371 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy370 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy321 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy402 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy371 [@tailcall]) st prefix
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy405 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy374 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy371 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy322 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy406 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy375 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy372 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy323 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy406 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy375 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy373 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy324 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy406 [@tailcall]) yyrecord
-    | _ -> (yy363 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy375 [@tailcall]) st prefix
+    | _ -> (yy314 [@tailcall]) st prefix
 
-and yy374 (yyrecord : tokenizer_yyrecord) : token =
-  (yy375 [@tailcall]) yyrecord
+and yy325 (st : tokenizer_state) (prefix : string) : token =
+  st.t1 <- st.yyt1;
+  st.t2 <- st.yyt2;
+  st.yycursor <- st.yyt2;
+  
+    multiline_prefix_check st prefix;
+    yyfnmulti' st prefix
 
-and yy375 (yyrecord : tokenizer_yyrecord) : token =
-  error "Invalid escape sequence"
 
-and yy376 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 2;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy326 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy327 [@tailcall]) st prefix
+      ) else (
+        st.yyt2 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy325 [@tailcall]) st prefix
+      )
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st prefix
+    | '\n'..'\x0C' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy328 [@tailcall]) st prefix
+    | '\r' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy330 [@tailcall]) st prefix
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy407 [@tailcall]) yyrecord
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy331 [@tailcall]) st prefix
+    | '\xC3'..'\xDF' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
+    | '\xE0' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy333 [@tailcall]) st prefix
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy408 [@tailcall]) yyrecord
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy334 [@tailcall]) st prefix
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy409 [@tailcall]) yyrecord
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy335 [@tailcall]) st prefix
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy410 [@tailcall]) yyrecord
-    | _ -> (yy377 [@tailcall]) yyrecord
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy336 [@tailcall]) st prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy337 [@tailcall]) st prefix
+    | '\xED' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy338 [@tailcall]) st prefix
+    | '\xF0' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy339 [@tailcall]) st prefix
+    | '\xF1'..'\xF3' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy340 [@tailcall]) st prefix
+    | '\xF4' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy341 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy377 (yyrecord : tokenizer_yyrecord) : token =
-  whitespace_escape yyrecord; string yyrecord
+and yy327 (st : tokenizer_state) (prefix : string) : token =
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy309 [@tailcall]) st prefix
+    | 1 -> (yy307 [@tailcall]) st prefix
+    | 2 -> (yy314 [@tailcall]) st prefix
+    | 3 -> (yy329 [@tailcall]) st prefix
+    | 4 -> (yy347 [@tailcall]) st prefix
+    | _ -> (yy345 [@tailcall]) st prefix
 
-and yy378 (yyrecord : tokenizer_yyrecord) : token =
-  (yy379 [@tailcall]) yyrecord
+and yy328 (st : tokenizer_state) (prefix : string) : token =
+  (yy329 [@tailcall]) st prefix
 
-and yy379 (yyrecord : tokenizer_yyrecord) : token =
+and yy329 (st : tokenizer_state) (prefix : string) : token =
+  st.t1 <- st.yyt1;
+  st.yycursor <- st.yyt2;
   
-    newline yyrecord;
-    whitespace_escape yyrecord;
-    string yyrecord
+    newline ~pos:st.t1 st;
+    (* Any newline is normalized to \n *)
+    Buffer.add_char st.info.strbuf '\n';
+    (* Skip lines consisting of any whitespace only (do not check the prefix) *)
+    yyfnmulti' st prefix
 
 
-and yy380 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy330 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy378 [@tailcall]) yyrecord
-    | _ -> (yy379 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy328 [@tailcall]) st prefix
+    | _ -> (yy329 [@tailcall]) st prefix
 
-and yy381 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_char yyrecord.info.strbuf '"'; string yyrecord
-
-and yy382 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_char yyrecord.info.strbuf '\\'; string yyrecord
-
-and yy383 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_char yyrecord.info.strbuf '\b'; string yyrecord
-
-and yy384 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_char yyrecord.info.strbuf '\012'; string yyrecord
-
-and yy385 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_char yyrecord.info.strbuf '\n'; string yyrecord
-
-and yy386 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_char yyrecord.info.strbuf '\r'; string yyrecord
-
-and yy387 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_char yyrecord.info.strbuf ' '; string yyrecord
-
-and yy388 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_char yyrecord.info.strbuf '\t'; string yyrecord
-
-and yy389 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 3;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '{' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy411 [@tailcall]) yyrecord
-    | _ -> (yy375 [@tailcall]) yyrecord
-
-and yy390 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy331 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy374 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy325 [@tailcall]) st prefix
     | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy378 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy328 [@tailcall]) st prefix
     | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy391 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  match yyrecord.yyaccept with
-    | 0 -> (yy356 [@tailcall]) yyrecord
-    | 1 -> (yy363 [@tailcall]) yyrecord
-    | 2 -> (yy377 [@tailcall]) yyrecord
-    | _ -> (yy375 [@tailcall]) yyrecord
-
-and yy392 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy332 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy374 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy325 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy393 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy333 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy392 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy394 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy334 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy392 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy412 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy376 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy395 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy335 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy413 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy377 [@tailcall]) st prefix
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy414 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy378 [@tailcall]) st prefix
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy392 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy396 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy336 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy412 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy376 [@tailcall]) st prefix
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy392 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy397 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy337 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy392 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy398 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy338 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy392 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy399 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy339 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy397 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy337 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy400 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy340 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy397 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy337 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy401 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy341 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy397 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy337 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy402 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy342 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 3;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy329 [@tailcall]) st prefix
+      ) else (
+        st.yyt1 <- st.yycursor;
+        st.yyt2 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy325 [@tailcall]) st prefix
+      )
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st prefix
+    | '\n'..'\x0C' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy328 [@tailcall]) st prefix
+    | '\r' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy330 [@tailcall]) st prefix
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy331 [@tailcall]) st prefix
+    | '\xC3'..'\xDF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st prefix
+    | '\xE0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy333 [@tailcall]) st prefix
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy334 [@tailcall]) st prefix
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy335 [@tailcall]) st prefix
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy336 [@tailcall]) st prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy337 [@tailcall]) st prefix
+    | '\xED' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy338 [@tailcall]) st prefix
+    | '\xF0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy339 [@tailcall]) st prefix
+    | '\xF1'..'\xF3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy340 [@tailcall]) st prefix
+    | '\xF4' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy341 [@tailcall]) st prefix
+    | _ -> (yy329 [@tailcall]) st prefix
+
+and yy343 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy379 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy344 (st : tokenizer_state) (prefix : string) : token =
+  (yy345 [@tailcall]) st prefix
+
+and yy345 (st : tokenizer_state) (prefix : string) : token =
+  error st "Invalid escape sequence"
+
+and yy346 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 4;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy380 [@tailcall]) st prefix
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy381 [@tailcall]) st prefix
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy382 [@tailcall]) st prefix
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy383 [@tailcall]) st prefix
+    | _ -> (yy347 [@tailcall]) st prefix
+
+and yy347 (st : tokenizer_state) (prefix : string) : token =
+  whitespace_escape st; string st prefix
+
+and yy348 (st : tokenizer_state) (prefix : string) : token =
+  (yy349 [@tailcall]) st prefix
+
+and yy349 (st : tokenizer_state) (prefix : string) : token =
+  
+    newline st;
+    whitespace_escape st;
+    string st prefix
+
+
+and yy350 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy348 [@tailcall]) st prefix
+    | _ -> (yy349 [@tailcall]) st prefix
+
+and yy351 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '"'; string st prefix
+
+and yy352 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\\'; string st prefix
+
+and yy353 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\b'; string st prefix
+
+and yy354 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\012'; string st prefix
+
+and yy355 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\n'; string st prefix
+
+and yy356 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\r'; string st prefix
+
+and yy357 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf ' '; string st prefix
+
+and yy358 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\t'; string st prefix
+
+and yy359 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '{' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy384 [@tailcall]) st prefix
+    | _ -> (yy345 [@tailcall]) st prefix
+
+and yy360 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\x9F'
+    | '\xA1'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy344 [@tailcall]) st prefix
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy348 [@tailcall]) st prefix
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy361 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy355 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy344 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy403 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy362 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy361 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy363 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy361 [@tailcall]) st prefix
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy385 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy364 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy386 [@tailcall]) st prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy387 [@tailcall]) st prefix
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy361 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy365 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy385 [@tailcall]) st prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy361 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy366 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy361 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy367 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy361 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy368 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy366 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy369 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy366 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy370 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy366 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy371 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy306 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy372 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8D'
     | '\x90'..'\xA7'
     | '\xAF'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy355 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy306 [@tailcall]) st prefix
     | '\x8E'..'\x8F'
     | '\xAA'..'\xAE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy354 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy305 [@tailcall]) st prefix
     | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy357 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy308 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy404 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy373 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA5'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy355 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy306 [@tailcall]) st prefix
     | '\xA6'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy354 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy305 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy405 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy374 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy355 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy306 [@tailcall]) st prefix
     | '\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy354 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy305 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy406 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy375 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy402 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy371 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy407 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
-
-and yy408 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy415 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
-
-and yy409 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy376 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy416 [@tailcall]) yyrecord
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy417 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
-
-and yy410 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy415 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
-
-and yy411 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '0'..'9'
-    | 'A'..'F'
-    | 'a'..'f' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy418 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
-
-and yy412 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st prefix
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy374 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy325 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy413 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy377 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st prefix
     | '\x8B'..'\xA7'
     | '\xAA'..'\xAE'
     | '\xB0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy374 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy325 [@tailcall]) st prefix
     | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy378 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy328 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy414 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy378 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy374 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy325 [@tailcall]) st prefix
     | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy415 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy379 (st : tokenizer_state) (prefix : string) : token =
+  QUOTED_STRING (multiline_contents st.info.strbuf)
+
+and yy380 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy381 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy388 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy382 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy389 [@tailcall]) st prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy390 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy416 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy383 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy388 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy417 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy376 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
-
-and yy418 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy384 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '0'..'9'
     | 'A'..'F'
     | 'a'..'f' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy418 [@tailcall]) yyrecord
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy391 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy385 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy344 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy386 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
+    | '\x8B'..'\xA7'
+    | '\xAA'..'\xAE'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy344 [@tailcall]) st prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy348 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy387 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy344 [@tailcall]) st prefix
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy388 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy389 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy390 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy346 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
+
+and yy391 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '0'..'9'
+    | 'A'..'F'
+    | 'a'..'f' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy391 [@tailcall]) st prefix
     | '}' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy419 [@tailcall]) yyrecord
-    | _ -> (yy391 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy392 [@tailcall]) st prefix
+    | _ -> (yy327 [@tailcall]) st prefix
 
-and yy419 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
-  yyrecord.yytr0 <- yyrecord.yytr0 - 1;
+and yy392 (st : tokenizer_state) (prefix : string) : token =
+  st.t1 <- st.yyt1;
+  st.t2 <- st.yycursor;
+  st.t2 <- st.t2 - 1;
   
-    let uchar = resolve_unicode_escape yyrecord in
-    Buffer.add_utf_8_uchar yyrecord.info.strbuf uchar;
-    string yyrecord
+    let len = st.t2 - st.t1 in
+    if len > 6 then
+      error st "Invalid unicode scalar value (too many digits)";
+    let code_str = sub st st.t1 st.t2 in
+    let code = Scanf.sscanf code_str "%X%!" (fun x -> x) in
+    if not @@ Uchar.is_valid code then
+      error st "Invalid unicode scalar value";
+    Buffer.add_utf_8_uchar st.info.strbuf (Uchar.unsafe_of_int code);
+    string st prefix
 
 
-and yy420 (yyrecord : tokenizer_yyrecord) : token =
-  error "Unterminated string"
+and yy393 (st : tokenizer_state) (prefix : string) : token =
+  error st "Unterminated string"
 
-and string_body (yyrecord : tokenizer_yyrecord) : token =
-  (yy353 [@tailcall]) yyrecord
+and yyfnmulti (st : tokenizer_state) (prefix : string) : token =
+  (yy304 [@tailcall]) st prefix
 
-
-
-and string yyrecord =
-  yyrecord.yystart <- yyrecord.yycursor;
-  string_body yyrecord
-
-
-let rec yy421 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy394 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\b'
     | '\x0E'..'\x1F'
     | '\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy467 [@tailcall]) yyrecord
+      if (st.yylimit <= st.yycursor) then (
+        (yy461 [@tailcall]) st prefix
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy422 [@tailcall]) yyrecord
+        st.yycursor <- st.yycursor + 1;
+        (yy395 [@tailcall]) st prefix
       )
     | '\t'
     | ' '..'!'
     | '#'..'['
     | ']'..'~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy423 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy396 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy425 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy398 [@tailcall]) st prefix
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy427 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy400 [@tailcall]) st prefix
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy428 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy401 [@tailcall]) st prefix
     | '\\' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy429 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy402 [@tailcall]) st prefix
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy432 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy405 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy433 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy406 [@tailcall]) st prefix
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy434 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy407 [@tailcall]) st prefix
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy435 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy408 [@tailcall]) st prefix
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy436 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy409 [@tailcall]) st prefix
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy437 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy410 [@tailcall]) st prefix
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy438 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy411 [@tailcall]) st prefix
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy439 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy412 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy440 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy413 [@tailcall]) st prefix
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy441 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy414 [@tailcall]) st prefix
     | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy430 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy403 [@tailcall]) st prefix
 
-and yy422 (yyrecord : tokenizer_yyrecord) : token =
-  error "Illegal character"
+and yy395 (st : tokenizer_state) (prefix : string) : token =
+  error st "Illegal character"
 
-and yy423 (yyrecord : tokenizer_yyrecord) : token =
-  (yy424 [@tailcall]) yyrecord
+and yy396 (st : tokenizer_state) (prefix : string) : token =
+  (yy397 [@tailcall]) st prefix
 
-and yy424 (yyrecord : tokenizer_yyrecord) : token =
-  
-    add_lexeme_substring yyrecord yyrecord.info.strbuf;
-    string_multiline yyrecord
+and yy397 (st : tokenizer_state) (prefix : string) : token =
+  add_lexeme_substring st st.info.strbuf; yyfnsingle' st prefix
 
+and yy398 (st : tokenizer_state) (prefix : string) : token =
+  (yy399 [@tailcall]) st prefix
 
-and yy425 (yyrecord : tokenizer_yyrecord) : token =
-  (yy426 [@tailcall]) yyrecord
+and yy399 (st : tokenizer_state) (prefix : string) : token =
+  newline st; error st "Unterminated string"
 
-and yy426 (yyrecord : tokenizer_yyrecord) : token =
-  
-    newline yyrecord;
-    (* Any newline is normalized to \n *)
-    Buffer.add_char yyrecord.info.strbuf '\n';
-    string_multiline yyrecord
-
-
-and yy427 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy400 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy425 [@tailcall]) yyrecord
-    | _ -> (yy426 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy398 [@tailcall]) st prefix
+    | _ -> (yy399 [@tailcall]) st prefix
 
-and yy428 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy442 [@tailcall]) yyrecord
-    | _ -> (yy424 [@tailcall]) yyrecord
+and yy401 (st : tokenizer_state) (prefix : string) : token =
+  QUOTED_STRING (Buffer.contents st.info.strbuf)
 
-and yy429 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy402 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'
+    | '#'..'['
+    | ']'..'a'
+    | 'c'..'e'
+    | 'g'..'m'
+    | 'o'..'q'
+    | 'v'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy397 [@tailcall]) st prefix
+      ) else (
+        st.yycursor <- st.yycursor + 1;
+        (yy415 [@tailcall]) st prefix
+      )
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy444 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy446 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy419 [@tailcall]) st prefix
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy448 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy421 [@tailcall]) st prefix
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy449 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy422 [@tailcall]) st prefix
     | '\\' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy450 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy423 [@tailcall]) st prefix
+    | 'b' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy424 [@tailcall]) st prefix
+    | 'f' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy425 [@tailcall]) st prefix
+    | 'n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy426 [@tailcall]) st prefix
+    | 'r' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy427 [@tailcall]) st prefix
+    | 's' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy428 [@tailcall]) st prefix
+    | 't' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy429 [@tailcall]) st prefix
+    | 'u' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy430 [@tailcall]) st prefix
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy451 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy431 [@tailcall]) st prefix
+    | '\xC3'..'\xDF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy433 [@tailcall]) st prefix
+    | '\xE0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy434 [@tailcall]) st prefix
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy452 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy435 [@tailcall]) st prefix
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy453 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy436 [@tailcall]) st prefix
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy454 [@tailcall]) yyrecord
-    | _ -> (yy424 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy437 [@tailcall]) st prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy438 [@tailcall]) st prefix
+    | '\xED' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy439 [@tailcall]) st prefix
+    | '\xF0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy440 [@tailcall]) st prefix
+    | '\xF1'..'\xF3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy441 [@tailcall]) st prefix
+    | '\xF4' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy442 [@tailcall]) st prefix
+    | _ -> (yy397 [@tailcall]) st prefix
 
-and yy430 (yyrecord : tokenizer_yyrecord) : token =
-  (yy431 [@tailcall]) yyrecord
+and yy403 (st : tokenizer_state) (prefix : string) : token =
+  (yy404 [@tailcall]) st prefix
 
-and yy431 (yyrecord : tokenizer_yyrecord) : token =
-  malformed_utf8 ()
+and yy404 (st : tokenizer_state) (prefix : string) : token =
+  malformed_utf8 st
 
-and yy432 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy405 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy423 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy396 [@tailcall]) st prefix
     | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy425 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy398 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy433 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy406 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy423 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy396 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy434 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy407 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy455 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy443 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy435 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy408 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy455 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy443 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy436 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy409 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy456 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy444 [@tailcall]) st prefix
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy457 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy445 [@tailcall]) st prefix
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy455 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy443 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy437 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy410 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy455 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy443 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy438 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy411 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy455 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy443 [@tailcall]) st prefix
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy458 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy446 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy439 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy412 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy459 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy447 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy440 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy413 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy459 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy447 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy441 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy414 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy459 [@tailcall]) yyrecord
-    | _ -> (yy431 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy447 [@tailcall]) st prefix
+    | _ -> (yy404 [@tailcall]) st prefix
 
-and yy442 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy460 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+and yy415 (st : tokenizer_state) (prefix : string) : token =
+  (yy416 [@tailcall]) st prefix
 
-and yy443 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  match yyrecord.yyaccept with
-    | 0 -> (yy424 [@tailcall]) yyrecord
-    | 1 -> (yy431 [@tailcall]) yyrecord
-    | _ -> (yy445 [@tailcall]) yyrecord
+and yy416 (st : tokenizer_state) (prefix : string) : token =
+  error st "Invalid escape sequence"
 
-and yy444 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 2;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy417 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy444 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy461 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy448 [@tailcall]) st prefix
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy452 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy449 [@tailcall]) st prefix
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy462 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy450 [@tailcall]) st prefix
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy454 [@tailcall]) yyrecord
-    | _ -> (yy445 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy451 [@tailcall]) st prefix
+    | _ -> (yy418 [@tailcall]) st prefix
 
-and yy445 (yyrecord : tokenizer_yyrecord) : token =
-  whitespace_escape yyrecord; string_multiline yyrecord
+and yy418 (st : tokenizer_state) (prefix : string) : token =
+  whitespace_escape st; string st prefix
 
-and yy446 (yyrecord : tokenizer_yyrecord) : token =
-  (yy447 [@tailcall]) yyrecord
+and yy419 (st : tokenizer_state) (prefix : string) : token =
+  (yy420 [@tailcall]) st prefix
 
-and yy447 (yyrecord : tokenizer_yyrecord) : token =
+and yy420 (st : tokenizer_state) (prefix : string) : token =
   
-    newline yyrecord;
-    whitespace_escape yyrecord;
-    string_multiline yyrecord
+    newline st;
+    whitespace_escape st;
+    string st prefix
 
 
-and yy448 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy421 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy446 [@tailcall]) yyrecord
-    | _ -> (yy447 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy419 [@tailcall]) st prefix
+    | _ -> (yy420 [@tailcall]) st prefix
 
-and yy449 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_string yyrecord.info.strbuf "\\\""; string_multiline yyrecord
+and yy422 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '"'; string st prefix
 
-and yy450 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.add_string yyrecord.info.strbuf "\\\\"; string_multiline yyrecord
+and yy423 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\\'; string st prefix
 
-and yy451 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy424 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\b'; string st prefix
+
+and yy425 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\012'; string st prefix
+
+and yy426 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\n'; string st prefix
+
+and yy427 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\r'; string st prefix
+
+and yy428 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf ' '; string st prefix
+
+and yy429 (st : tokenizer_state) (prefix : string) : token =
+  Buffer.add_char st.info.strbuf '\t'; string st prefix
+
+and yy430 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 3;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
+    | '{' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy452 [@tailcall]) st prefix
+    | _ -> (yy416 [@tailcall]) st prefix
+
+and yy431 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\x9F'
+    | '\xA1'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy415 [@tailcall]) st prefix
     | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy446 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy419 [@tailcall]) st prefix
     | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy444 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy452 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy463 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+and yy432 (st : tokenizer_state) (prefix : string) : token =
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy397 [@tailcall]) st prefix
+    | 1 -> (yy404 [@tailcall]) st prefix
+    | 2 -> (yy418 [@tailcall]) st prefix
+    | _ -> (yy416 [@tailcall]) st prefix
 
-and yy453 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy464 [@tailcall]) yyrecord
-    | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy465 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
-
-and yy454 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  match yych with
-    | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy463 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
-
-and yy455 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy433 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy423 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy415 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy456 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy434 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy433 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy435 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy433 [@tailcall]) st prefix
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy453 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy436 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy454 [@tailcall]) st prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy455 [@tailcall]) st prefix
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy433 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy437 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy453 [@tailcall]) st prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy433 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy438 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy433 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy439 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy433 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy440 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy438 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy441 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy438 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy442 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy438 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy443 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy396 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy444 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8D'
     | '\x90'..'\xA7'
     | '\xAF'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy423 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy396 [@tailcall]) st prefix
     | '\x8E'..'\x8F'
     | '\xAA'..'\xAE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy422 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy395 [@tailcall]) st prefix
     | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy425 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy398 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy457 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy445 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA5'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy423 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy396 [@tailcall]) st prefix
     | '\xA6'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy422 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy395 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy458 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy446 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy423 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy396 [@tailcall]) st prefix
     | '\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy422 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy395 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy459 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy447 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy455 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy443 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy460 (yyrecord : tokenizer_yyrecord) : token =
-  
-    QUOTED_STRING (resolve_escapes (dedent (Buffer.contents yyrecord.info.strbuf)))
-
-
-and yy461 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy448 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy444 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy462 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy449 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy456 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy450 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy466 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy457 [@tailcall]) st prefix
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy465 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy458 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy463 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy451 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy444 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy456 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy464 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy452 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '0'..'9'
+    | 'A'..'F'
+    | 'a'..'f' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy459 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy453 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy415 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy454 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy444 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
+    | '\x8B'..'\xA7'
+    | '\xAA'..'\xAE'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy415 [@tailcall]) st prefix
     | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy446 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy419 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy465 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy455 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy415 [@tailcall]) st prefix
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy456 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy457 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy458 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy444 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy417 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
 
-and yy466 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy459 (st : tokenizer_state) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '0'..'9'
+    | 'A'..'F'
+    | 'a'..'f' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy459 [@tailcall]) st prefix
+    | '}' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy460 [@tailcall]) st prefix
+    | _ -> (yy432 [@tailcall]) st prefix
+
+and yy460 (st : tokenizer_state) (prefix : string) : token =
+  st.t1 <- st.yyt1;
+  st.t2 <- st.yycursor;
+  st.t2 <- st.t2 - 1;
+  
+    let len = st.t2 - st.t1 in
+    if len > 6 then
+      error st "Invalid unicode scalar value (too many digits)";
+    let code_str = sub st st.t1 st.t2 in
+    let code = Scanf.sscanf code_str "%X%!" (fun x -> x) in
+    if not @@ Uchar.is_valid code then
+      error st "Invalid unicode scalar value";
+    Buffer.add_utf_8_uchar st.info.strbuf (Uchar.unsafe_of_int code);
+    string st prefix
+
+
+and yy461 (st : tokenizer_state) (prefix : string) : token =
+  error st "Unterminated string"
+
+and yyfnsingle (st : tokenizer_state) (prefix : string) : token =
+  (yy394 [@tailcall]) st prefix
+
+and yy303 (st : tokenizer_state) (prefix : string) : token =
+  match st.yycond with
+    | YYC_multi -> (yyfnmulti [@tailcall]) st prefix
+    | YYC_single -> (yyfnsingle [@tailcall]) st prefix
+
+and string_body (st : tokenizer_state) (prefix : string) : token =
+  (yy303 [@tailcall]) st prefix
+
+
+
+and yyfnsingle' st prefix = save_start_position st; yyfnsingle st prefix
+and yyfnmulti' st prefix = save_start_position st; yyfnmulti st prefix
+and string st prefix = save_start_position st; string_body st prefix
+
+let string_multiline st =
+  validate_multiline_start st;
+  let prefix = detect_multiline_string_prefix st (make_lexing_end_pos st) in
+  st.yycond <- YYC_multi;
+  string st prefix
+
+let string_singleline st = st.yycond <- YYC_single; string st ""
+
+let check_hashlen st exp_hashlen =
+  let got_hashlen = st.yycursor - st.t1 in
+  if got_hashlen > exp_hashlen then
+    error st (sprintf "Expected %d hash symbol(s), got %d" exp_hashlen got_hashlen)
+  else if got_hashlen < exp_hashlen then begin
+    Buffer.add_string st.info.strbuf (lexeme st);
+    false
+  end else
+    true
+
+
+let rec yy463 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy513 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        st.yycursor <- st.yycursor + 1;
+        (yy464 [@tailcall]) st exp_hashlen prefix
+      )
+    | '\t'
+    | ' '..'!'
+    | '#'..'~' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy465 [@tailcall]) st exp_hashlen prefix
+    | '\n'..'\x0C' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy467 [@tailcall]) st exp_hashlen prefix
+    | '\r' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy469 [@tailcall]) st exp_hashlen prefix
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy470 [@tailcall]) st exp_hashlen prefix
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy473 [@tailcall]) st exp_hashlen prefix
+    | '\xC3'..'\xDF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy474 [@tailcall]) st exp_hashlen prefix
+    | '\xE0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy475 [@tailcall]) st exp_hashlen prefix
+    | '\xE1'
+    | '\xE3'..'\xEC'
+    | '\xEE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy476 [@tailcall]) st exp_hashlen prefix
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy477 [@tailcall]) st exp_hashlen prefix
+    | '\xED' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy478 [@tailcall]) st exp_hashlen prefix
+    | '\xEF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy479 [@tailcall]) st exp_hashlen prefix
+    | '\xF0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy480 [@tailcall]) st exp_hashlen prefix
+    | '\xF1'..'\xF3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy481 [@tailcall]) st exp_hashlen prefix
+    | '\xF4' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy482 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      st.yycursor <- st.yycursor + 1;
+      (yy471 [@tailcall]) st exp_hashlen prefix
+
+and yy464 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  error st "Illegal character"
+
+and yy465 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy466 [@tailcall]) st exp_hashlen prefix
+
+and yy466 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  add_lexeme_substring st st.info.strbuf; yyfnrmulti' st exp_hashlen prefix
+
+and yy467 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy468 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        st.yyt1 <- st.yycursor;
+        st.yyt2 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy483 [@tailcall]) st exp_hashlen prefix
+      )
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy484 [@tailcall]) st exp_hashlen prefix
+    | '\n'..'\x0C' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy486 [@tailcall]) st exp_hashlen prefix
+    | '\r' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy488 [@tailcall]) st exp_hashlen prefix
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy489 [@tailcall]) st exp_hashlen prefix
+    | '\xC3'..'\xDF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | '\xE0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy491 [@tailcall]) st exp_hashlen prefix
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy492 [@tailcall]) st exp_hashlen prefix
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy493 [@tailcall]) st exp_hashlen prefix
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy494 [@tailcall]) st exp_hashlen prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy495 [@tailcall]) st exp_hashlen prefix
+    | '\xED' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy496 [@tailcall]) st exp_hashlen prefix
+    | '\xF0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy497 [@tailcall]) st exp_hashlen prefix
+    | '\xF1'..'\xF3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy498 [@tailcall]) st exp_hashlen prefix
+    | '\xF4' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy499 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy468 [@tailcall]) st exp_hashlen prefix
+
+and yy468 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  newline st; yyfnrmulti' st exp_hashlen prefix
+
+and yy469 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy468 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        st.yyt1 <- st.yycursor;
+        st.yyt2 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy483 [@tailcall]) st exp_hashlen prefix
+      )
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy484 [@tailcall]) st exp_hashlen prefix
+    | '\n' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy500 [@tailcall]) st exp_hashlen prefix
+    | '\x0B'..'\x0C' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy486 [@tailcall]) st exp_hashlen prefix
+    | '\r' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy488 [@tailcall]) st exp_hashlen prefix
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy489 [@tailcall]) st exp_hashlen prefix
+    | '\xC3'..'\xDF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | '\xE0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy491 [@tailcall]) st exp_hashlen prefix
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy492 [@tailcall]) st exp_hashlen prefix
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy493 [@tailcall]) st exp_hashlen prefix
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy494 [@tailcall]) st exp_hashlen prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy495 [@tailcall]) st exp_hashlen prefix
+    | '\xED' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy496 [@tailcall]) st exp_hashlen prefix
+    | '\xF0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy497 [@tailcall]) st exp_hashlen prefix
+    | '\xF1'..'\xF3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy498 [@tailcall]) st exp_hashlen prefix
+    | '\xF4' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy499 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy468 [@tailcall]) st exp_hashlen prefix
+
+and yy470 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy501 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy466 [@tailcall]) st exp_hashlen prefix
+
+and yy471 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy472 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  malformed_utf8 st
+
+and yy473 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy465 [@tailcall]) st exp_hashlen prefix
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy467 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy474 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy465 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy475 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy502 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy476 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy502 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy477 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy503 [@tailcall]) st exp_hashlen prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy504 [@tailcall]) st exp_hashlen prefix
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy502 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy478 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy502 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy479 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBA'
+    | '\xBC'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy502 [@tailcall]) st exp_hashlen prefix
+    | '\xBB' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy505 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy480 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy506 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy481 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy506 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy482 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy506 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy472 [@tailcall]) st exp_hashlen prefix
+
+and yy483 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.t1 <- st.yyt1;
+  st.t2 <- st.yyt2;
+  st.yycursor <- st.yyt2;
+  
+    multiline_prefix_check st prefix;
+    yyfnrmulti' st exp_hashlen prefix
+
+
+and yy484 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy485 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        st.yyt2 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy483 [@tailcall]) st exp_hashlen prefix
+      )
+    | '\t'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy484 [@tailcall]) st exp_hashlen prefix
+    | '\n'..'\x0C' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy486 [@tailcall]) st exp_hashlen prefix
+    | '\r' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy488 [@tailcall]) st exp_hashlen prefix
+    | '\xC2' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy489 [@tailcall]) st exp_hashlen prefix
+    | '\xC3'..'\xDF' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | '\xE0' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy491 [@tailcall]) st exp_hashlen prefix
+    | '\xE1' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy492 [@tailcall]) st exp_hashlen prefix
+    | '\xE2' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy493 [@tailcall]) st exp_hashlen prefix
+    | '\xE3' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy494 [@tailcall]) st exp_hashlen prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy495 [@tailcall]) st exp_hashlen prefix
+    | '\xED' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy496 [@tailcall]) st exp_hashlen prefix
+    | '\xF0' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy497 [@tailcall]) st exp_hashlen prefix
+    | '\xF1'..'\xF3' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy498 [@tailcall]) st exp_hashlen prefix
+    | '\xF4' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy499 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy485 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy468 [@tailcall]) st exp_hashlen prefix
+    | 1 -> (yy466 [@tailcall]) st exp_hashlen prefix
+    | 2 -> (yy472 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy487 [@tailcall]) st exp_hashlen prefix
+
+and yy486 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy487 [@tailcall]) st exp_hashlen prefix
+
+and yy487 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.t1 <- st.yyt1;
+  st.yycursor <- st.yyt2;
+  
+    newline ~pos:st.t1 st;
+    Buffer.add_char st.info.strbuf '\n';
+    yyfnrmulti' st exp_hashlen prefix
+
+
+and yy488 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy486 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy487 [@tailcall]) st exp_hashlen prefix
+
+and yy489 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\x9F'
+    | '\xA1'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy483 [@tailcall]) st exp_hashlen prefix
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy486 [@tailcall]) st exp_hashlen prefix
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy484 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy490 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy483 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy491 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy492 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy507 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy493 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy508 [@tailcall]) st exp_hashlen prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy509 [@tailcall]) st exp_hashlen prefix
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy494 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy507 [@tailcall]) st exp_hashlen prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy495 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy496 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy497 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy495 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy498 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy495 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy499 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy495 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy500 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yyaccept <- 3;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy487 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        st.yyt1 <- st.yycursor;
+        st.yyt2 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy483 [@tailcall]) st exp_hashlen prefix
+      )
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy484 [@tailcall]) st exp_hashlen prefix
+    | '\n'..'\x0C' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy486 [@tailcall]) st exp_hashlen prefix
+    | '\r' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy488 [@tailcall]) st exp_hashlen prefix
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy489 [@tailcall]) st exp_hashlen prefix
+    | '\xC3'..'\xDF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy490 [@tailcall]) st exp_hashlen prefix
+    | '\xE0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy491 [@tailcall]) st exp_hashlen prefix
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy492 [@tailcall]) st exp_hashlen prefix
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy493 [@tailcall]) st exp_hashlen prefix
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy494 [@tailcall]) st exp_hashlen prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy495 [@tailcall]) st exp_hashlen prefix
+    | '\xED' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy496 [@tailcall]) st exp_hashlen prefix
+    | '\xF0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy497 [@tailcall]) st exp_hashlen prefix
+    | '\xF1'..'\xF3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy498 [@tailcall]) st exp_hashlen prefix
+    | '\xF4' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy499 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy487 [@tailcall]) st exp_hashlen prefix
+
+and yy501 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy510 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy502 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy465 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy503 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xAF'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy465 [@tailcall]) st exp_hashlen prefix
+    | '\x8E'..'\x8F'
+    | '\xAA'..'\xAE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy464 [@tailcall]) st exp_hashlen prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy467 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy504 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xA5'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy465 [@tailcall]) st exp_hashlen prefix
+    | '\xA6'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy464 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy505 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy465 [@tailcall]) st exp_hashlen prefix
+    | '\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy464 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy506 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy502 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy507 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy484 [@tailcall]) st exp_hashlen prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy483 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy508 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy444 [@tailcall]) yyrecord
-    | _ -> (yy443 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy484 [@tailcall]) st exp_hashlen prefix
+    | '\x8B'..'\xA7'
+    | '\xAA'..'\xAE'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy483 [@tailcall]) st exp_hashlen prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy486 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
 
-and yy467 (yyrecord : tokenizer_yyrecord) : token =
-  error "Unterminated multiline string"
+and yy509 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy483 [@tailcall]) st exp_hashlen prefix
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy484 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
 
-and string_multiline_body (yyrecord : tokenizer_yyrecord) : token =
-  (yy421 [@tailcall]) yyrecord
+and yy510 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '#' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy511 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy485 [@tailcall]) st exp_hashlen prefix
+
+and yy511 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '#' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy511 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy512 [@tailcall]) st exp_hashlen prefix
+
+and yy512 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.t1 <- st.yyt1;
+  
+    if check_hashlen st exp_hashlen then begin
+      RAW_STRING (multiline_contents st.info.strbuf)
+    end else yyfnrmulti' st exp_hashlen prefix
+
+
+and yy513 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  error st "Unterminated raw string"
+
+and yyfnrmulti (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy463 [@tailcall]) st exp_hashlen prefix
+
+and yy514 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        (yy542 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        st.yycursor <- st.yycursor + 1;
+        (yy515 [@tailcall]) st exp_hashlen prefix
+      )
+    | '\t'
+    | ' '..'!'
+    | '#'..'~' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy516 [@tailcall]) st exp_hashlen prefix
+    | '\n'..'\x0C' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy518 [@tailcall]) st exp_hashlen prefix
+    | '\r' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy520 [@tailcall]) st exp_hashlen prefix
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy521 [@tailcall]) st exp_hashlen prefix
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy524 [@tailcall]) st exp_hashlen prefix
+    | '\xC3'..'\xDF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy525 [@tailcall]) st exp_hashlen prefix
+    | '\xE0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy526 [@tailcall]) st exp_hashlen prefix
+    | '\xE1'
+    | '\xE3'..'\xEC'
+    | '\xEE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy527 [@tailcall]) st exp_hashlen prefix
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy528 [@tailcall]) st exp_hashlen prefix
+    | '\xED' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy529 [@tailcall]) st exp_hashlen prefix
+    | '\xEF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy530 [@tailcall]) st exp_hashlen prefix
+    | '\xF0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy531 [@tailcall]) st exp_hashlen prefix
+    | '\xF1'..'\xF3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy532 [@tailcall]) st exp_hashlen prefix
+    | '\xF4' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy533 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      st.yycursor <- st.yycursor + 1;
+      (yy522 [@tailcall]) st exp_hashlen prefix
+
+and yy515 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  error st "Illegal character"
+
+and yy516 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy517 [@tailcall]) st exp_hashlen prefix
+
+and yy517 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  add_lexeme_substring st st.info.strbuf; yyfnrsingle' st exp_hashlen prefix
+
+and yy518 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy519 [@tailcall]) st exp_hashlen prefix
+
+and yy519 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  newline st; error st "Unterminated raw string"
+
+and yy520 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy518 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy519 [@tailcall]) st exp_hashlen prefix
+
+and yy521 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '#' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy534 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy517 [@tailcall]) st exp_hashlen prefix
+
+and yy522 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy523 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  malformed_utf8 st
+
+and yy524 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy516 [@tailcall]) st exp_hashlen prefix
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy518 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy525 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy516 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy526 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy536 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy527 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy536 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy528 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy538 [@tailcall]) st exp_hashlen prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy539 [@tailcall]) st exp_hashlen prefix
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy536 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy529 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy536 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy530 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBA'
+    | '\xBC'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy536 [@tailcall]) st exp_hashlen prefix
+    | '\xBB' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy540 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy531 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy541 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy532 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy541 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy533 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy541 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy534 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '#' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy534 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy535 [@tailcall]) st exp_hashlen prefix
+
+and yy535 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.t1 <- st.yyt1;
+  
+    if check_hashlen st exp_hashlen then
+      RAW_STRING (Buffer.contents st.info.strbuf)
+    else yyfnrsingle' st exp_hashlen prefix
+
+
+and yy536 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy516 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy537 [@tailcall]) st exp_hashlen prefix
+
+and yy537 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yycursor <- st.yymarker;
+  (yy523 [@tailcall]) st exp_hashlen prefix
+
+and yy538 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xAF'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy516 [@tailcall]) st exp_hashlen prefix
+    | '\x8E'..'\x8F'
+    | '\xAA'..'\xAE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy515 [@tailcall]) st exp_hashlen prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy518 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy537 [@tailcall]) st exp_hashlen prefix
+
+and yy539 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xA5'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy516 [@tailcall]) st exp_hashlen prefix
+    | '\xA6'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy515 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy537 [@tailcall]) st exp_hashlen prefix
+
+and yy540 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy516 [@tailcall]) st exp_hashlen prefix
+    | '\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy515 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy537 [@tailcall]) st exp_hashlen prefix
+
+and yy541 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = peek st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy536 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy537 [@tailcall]) st exp_hashlen prefix
+
+and yy542 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  error st "Unterminated raw string"
+
+and yyfnrsingle (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy514 [@tailcall]) st exp_hashlen prefix
+
+and yy462 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  match st.yycond with
+    | YYC_rmulti -> (yyfnrmulti [@tailcall]) st exp_hashlen prefix
+    | YYC_rsingle -> (yyfnrsingle [@tailcall]) st exp_hashlen prefix
+
+and raw_string_body (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy462 [@tailcall]) st exp_hashlen prefix
 
 
 
-and string_multiline yyrecord =
-  yyrecord.yystart <- yyrecord.yycursor;
-  string_multiline_body yyrecord
+and yyfnrmulti' st a b = save_start_position st; yyfnrmulti st a b
+and yyfnrsingle' st a b = save_start_position st; yyfnrsingle st a b
+and raw_string st exp_hashlen prefix =
+  save_start_position st;
+  raw_string_body st exp_hashlen prefix
+
+let raw_string_multiline st exp_hashlen =
+  validate_multiline_start st;
+  let prefix = detect_raw_multiline_string_prefix st exp_hashlen (make_lexing_end_pos st) in
+  st.yycond <- YYC_rmulti;
+  raw_string st exp_hashlen prefix
+
+let raw_string_singleline st exp_hashlen =
+  st.yycond <- YYC_rsingle;
+  raw_string st exp_hashlen ""
 
 
-let rec yy468 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+let rec yy543 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\b'
@@ -5097,22 +6578,22 @@ let rec yy468 (yyrecord : tokenizer_yyrecord) : token =
     | '['
     | ']'
     | '\x7F' ->
-      if (yyrecord.yylimit <= yyrecord.yycursor) then (
-        (yy616 [@tailcall]) yyrecord
+      if (st.yylimit <= st.yycursor) then (
+        (yy691 [@tailcall]) st
       ) else (
-        yyrecord.yycursor <- yyrecord.yycursor + 1;
-        (yy469 [@tailcall]) yyrecord
+        st.yycursor <- st.yycursor + 1;
+        (yy544 [@tailcall]) st
       )
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
     | '\n'..'\x0C' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy473 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy548 [@tailcall]) st
     | '\r' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy475 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy550 [@tailcall]) st
     | '!'
     | '$'..'\''
     | '*'
@@ -5123,146 +6604,145 @@ let rec yy468 (yyrecord : tokenizer_yyrecord) : token =
     | '^'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy479 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy554 [@tailcall]) st
     | '#' ->
-      yyrecord.yyt1 <- yyrecord.yycursor;
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy481 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy556 [@tailcall]) st
     | '(' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy482 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy557 [@tailcall]) st
     | ')' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy483 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy558 [@tailcall]) st
     | '+'
     | '-' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy484 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy559 [@tailcall]) st
     | '.' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy485 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy560 [@tailcall]) st
     | '/' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy486 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy561 [@tailcall]) st
     | '0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy487 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy562 [@tailcall]) st
     | '1'..'9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy489 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy564 [@tailcall]) st
     | ';' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy490 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy565 [@tailcall]) st
     | '=' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy491 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy566 [@tailcall]) st
     | '\\' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy492 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy567 [@tailcall]) st
     | '{' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy493 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy568 [@tailcall]) st
     | '}' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy494 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy569 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy497 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy572 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy498 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy573 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy499 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy574 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy500 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy575 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy501 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy576 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy502 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy577 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy503 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy578 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy504 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy579 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy505 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy580 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy506 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy581 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy507 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy582 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy508 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy583 [@tailcall]) st
     | _ ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy495 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy570 [@tailcall]) st
 
-and yy469 (yyrecord : tokenizer_yyrecord) : token =
-  (yy470 [@tailcall]) yyrecord
+and yy544 (st : tokenizer_state) : token =
+  (yy545 [@tailcall]) st
 
-and yy470 (yyrecord : tokenizer_yyrecord) : token =
-  error "Illegal character"
+and yy545 (st : tokenizer_state) : token =
+  error st "Illegal character"
 
-and yy471 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 0;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy546 (st : tokenizer_state) : token =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\t'
     | ' ' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy509 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy584 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy511 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy586 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy512 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy587 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy513 [@tailcall]) yyrecord
-    | _ -> (yy472 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy588 [@tailcall]) st
+    | _ -> (yy547 [@tailcall]) st
 
-and yy472 (yyrecord : tokenizer_yyrecord) : token =
-  main yyrecord
+and yy547 (st : tokenizer_state) : token =
+  main st
 
-and yy473 (yyrecord : tokenizer_yyrecord) : token =
-  (yy474 [@tailcall]) yyrecord
+and yy548 (st : tokenizer_state) : token =
+  (yy549 [@tailcall]) st
 
-and yy474 (yyrecord : tokenizer_yyrecord) : token =
-  newline yyrecord; NEWLINE
+and yy549 (st : tokenizer_state) : token =
+  newline st; NEWLINE
 
-and yy475 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy550 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\n' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy473 [@tailcall]) yyrecord
-    | _ -> (yy474 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy548 [@tailcall]) st
+    | _ -> (yy549 [@tailcall]) st
 
-and yy476 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  (yy477 [@tailcall]) yyrecord yych
+and yy551 (st : tokenizer_state) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  (yy552 [@tailcall]) st yych
 
-and yy477 (yyrecord : tokenizer_yyrecord) (yych : char) : token =
+and yy552 (st : tokenizer_state) (yych : char) : token =
   match yych with
     | '!'
     | '$'..'\''
@@ -5273,69 +6753,69 @@ and yy477 (yyrecord : tokenizer_yyrecord) (yych : char) : token =
     | '^'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy514 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy589 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy516 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy591 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy517 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy592 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy518 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy593 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy519 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy594 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy520 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy595 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy521 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy596 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy522 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy597 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy523 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy598 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy524 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy599 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy525 [@tailcall]) yyrecord
-    | _ -> (yy478 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy600 [@tailcall]) st
+    | _ -> (yy553 [@tailcall]) st
 
-and yy478 (yyrecord : tokenizer_yyrecord) : token =
+and yy553 (st : tokenizer_state) : token =
   
-    IDENT_STRING (lexeme yyrecord)
+    IDENT_STRING (lexeme st)
 
 
-and yy479 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 2;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy554 (st : tokenizer_state) : token =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy526 [@tailcall]) yyrecord
-    | _ -> (yy480 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy601 [@tailcall]) st
+    | _ -> (yy555 [@tailcall]) st
 
-and yy480 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.reset yyrecord.info.strbuf; string yyrecord
+and yy555 (st : tokenizer_state) : token =
+  Buffer.reset st.info.strbuf; string_singleline st
 
-and yy481 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 3;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy556 (st : tokenizer_state) : token =
+  st.yyaccept <- 3;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -5346,67 +6826,67 @@ and yy481 (yyrecord : tokenizer_yyrecord) : token =
     | '^'..'z'
     | '|'
     | '~'
-    | '\xC2'..'\xF4' -> (yy528 [@tailcall]) yyrecord yych
+    | '\xC2'..'\xF4' -> (yy603 [@tailcall]) st yych
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy530 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy605 [@tailcall]) st
     | '#' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy532 [@tailcall]) yyrecord
-    | _ -> (yy470 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy607 [@tailcall]) st
+    | _ -> (yy545 [@tailcall]) st
 
-and yy482 (yyrecord : tokenizer_yyrecord) : token =
+and yy557 (st : tokenizer_state) : token =
   LPAREN
 
-and yy483 (yyrecord : tokenizer_yyrecord) : token =
+and yy558 (st : tokenizer_state) : token =
   RPAREN
 
-and yy484 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy559 (st : tokenizer_state) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy478 [@tailcall]) yyrecord
+    | '\x00' -> (yy553 [@tailcall]) st
     | '.' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy485 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy560 [@tailcall]) st
     | '0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy487 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy562 [@tailcall]) st
     | '1'..'9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy489 [@tailcall]) yyrecord
-    | _ -> (yy477 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy564 [@tailcall]) st
+    | _ -> (yy552 [@tailcall]) st yych
 
-and yy485 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 1;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy560 (st : tokenizer_state) : token =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy478 [@tailcall]) yyrecord
+    | '\x00' -> (yy553 [@tailcall]) st
     | '0'..'9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy545 [@tailcall]) yyrecord
-    | _ -> (yy477 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy620 [@tailcall]) st
+    | _ -> (yy552 [@tailcall]) st yych
 
-and yy486 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy561 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '*' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy547 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy622 [@tailcall]) st
     | '-' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy548 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy623 [@tailcall]) st
     | '/' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy549 [@tailcall]) yyrecord
-    | _ -> (yy470 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy624 [@tailcall]) st
+    | _ -> (yy545 [@tailcall]) st
 
-and yy487 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 4;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy562 (st : tokenizer_state) : token =
+  st.yyaccept <- 4;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -5423,36 +6903,36 @@ and yy487 (yyrecord : tokenizer_yyrecord) : token =
     | 'y'..'z'
     | '|'
     | '~'
-    | '\xC2'..'\xF4' -> (yy551 [@tailcall]) yyrecord yych
+    | '\xC2'..'\xF4' -> (yy626 [@tailcall]) st yych
     | '.' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy553 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy628 [@tailcall]) st
     | '0'..'9'
     | '_' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy489 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy564 [@tailcall]) st
     | 'E'
     | 'e' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy554 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy629 [@tailcall]) st
     | 'b' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy555 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy630 [@tailcall]) st
     | 'o' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy556 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy631 [@tailcall]) st
     | 'x' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy557 [@tailcall]) yyrecord
-    | _ -> (yy488 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy632 [@tailcall]) st
+    | _ -> (yy563 [@tailcall]) st
 
-and yy488 (yyrecord : tokenizer_yyrecord) : token =
-  INTEGER (lexeme yyrecord)
+and yy563 (st : tokenizer_state) : token =
+  INTEGER (lexeme st)
 
-and yy489 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 4;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy564 (st : tokenizer_state) : token =
+  st.yyaccept <- 4;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -5466,400 +6946,400 @@ and yy489 (yyrecord : tokenizer_yyrecord) : token =
     | 'f'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
     | '.' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy553 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy628 [@tailcall]) st
     | '0'..'9'
     | '_' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy489 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy564 [@tailcall]) st
     | 'E'
     | 'e' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy554 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy629 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy558 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy560 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy635 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy561 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy636 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy562 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy637 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy563 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy565 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy640 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy566 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy641 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy567 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy642 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy568 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy643 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy569 [@tailcall]) yyrecord
-    | _ -> (yy488 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy644 [@tailcall]) st
+    | _ -> (yy563 [@tailcall]) st
 
-and yy490 (yyrecord : tokenizer_yyrecord) : token =
+and yy565 (st : tokenizer_state) : token =
   SEMI
 
-and yy491 (yyrecord : tokenizer_yyrecord) : token =
+and yy566 (st : tokenizer_state) : token =
   EQ
 
-and yy492 (yyrecord : tokenizer_yyrecord) : token =
-  line_cont yyrecord; main yyrecord
+and yy567 (st : tokenizer_state) : token =
+  line_cont st; main st
 
-and yy493 (yyrecord : tokenizer_yyrecord) : token =
+and yy568 (st : tokenizer_state) : token =
   LBRACE
 
-and yy494 (yyrecord : tokenizer_yyrecord) : token =
+and yy569 (st : tokenizer_state) : token =
   RBRACE
 
-and yy495 (yyrecord : tokenizer_yyrecord) : token =
-  (yy496 [@tailcall]) yyrecord
+and yy570 (st : tokenizer_state) : token =
+  (yy571 [@tailcall]) st
 
-and yy496 (yyrecord : tokenizer_yyrecord) : token =
-  malformed_utf8 ()
+and yy571 (st : tokenizer_state) : token =
+  malformed_utf8 st
 
-and yy497 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy572 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
     | '\x85' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy473 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy548 [@tailcall]) st
     | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy498 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy573 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy499 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy574 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy500 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy575 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy570 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy645 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy501 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy576 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy571 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy646 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy572 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy647 [@tailcall]) st
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy502 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy577 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy570 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy645 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy503 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy578 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy504 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy579 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy505 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy580 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy573 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy648 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy506 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy581 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy520 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy595 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy507 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy582 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy520 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy595 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy508 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 5;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy583 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy520 [@tailcall]) yyrecord
-    | _ -> (yy496 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy595 [@tailcall]) st
+    | _ -> (yy571 [@tailcall]) st
 
-and yy509 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy584 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy510 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yycursor <- yyrecord.yymarker;
-  match yyrecord.yyaccept with
-    | 0 -> (yy472 [@tailcall]) yyrecord
-    | 1 -> (yy478 [@tailcall]) yyrecord
-    | 2 -> (yy480 [@tailcall]) yyrecord
-    | 3 -> (yy470 [@tailcall]) yyrecord
-    | 4 -> (yy488 [@tailcall]) yyrecord
-    | 5 -> (yy496 [@tailcall]) yyrecord
-    | 6 -> (yy529 [@tailcall]) yyrecord
-    | 7 -> (yy531 [@tailcall]) yyrecord
-    | 8 -> (yy546 [@tailcall]) yyrecord
-    | 9 -> (yy552 [@tailcall]) yyrecord
-    | _ -> (yy600 [@tailcall]) yyrecord
+and yy585 (st : tokenizer_state) : token =
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy547 [@tailcall]) st
+    | 1 -> (yy553 [@tailcall]) st
+    | 2 -> (yy555 [@tailcall]) st
+    | 3 -> (yy545 [@tailcall]) st
+    | 4 -> (yy563 [@tailcall]) st
+    | 5 -> (yy571 [@tailcall]) st
+    | 6 -> (yy604 [@tailcall]) st
+    | 7 -> (yy606 [@tailcall]) st
+    | 8 -> (yy621 [@tailcall]) st
+    | 9 -> (yy627 [@tailcall]) st
+    | _ -> (yy675 [@tailcall]) st
 
-and yy511 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy586 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy574 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy649 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy512 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy587 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy575 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy650 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy576 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy651 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy513 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy588 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy574 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy649 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy514 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy589 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy515 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy590 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy516 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy591 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy517 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy592 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy577 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy652 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy518 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy593 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy578 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy653 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy579 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy654 [@tailcall]) st
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy519 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy594 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy577 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy652 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy520 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy595 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy521 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy596 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy522 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy597 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy515 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy590 [@tailcall]) st
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy580 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy655 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy523 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy598 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy520 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy595 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy524 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy599 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy520 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy595 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy525 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy600 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy520 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy595 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy526 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy601 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy581 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy656 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy527 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 6;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  (yy528 [@tailcall]) yyrecord yych
+and yy602 (st : tokenizer_state) : token =
+  st.yyaccept <- 6;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  (yy603 [@tailcall]) st yych
 
-and yy528 (yyrecord : tokenizer_yyrecord) (yych : char) : token =
+and yy603 (st : tokenizer_state) (yych : char) : token =
   match yych with
     | '!'
     | '$'..'\''
@@ -5870,210 +7350,209 @@ and yy528 (yyrecord : tokenizer_yyrecord) (yych : char) : token =
     | '^'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy527 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy602 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy533 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy608 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy534 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy609 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy535 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy610 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy536 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy611 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy537 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy612 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy538 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy613 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy539 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy614 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy540 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy615 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy541 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy616 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy542 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy617 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy543 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy618 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy544 [@tailcall]) yyrecord
-    | _ -> (yy529 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy619 [@tailcall]) st
+    | _ -> (yy604 [@tailcall]) st
 
-and yy529 (yyrecord : tokenizer_yyrecord) : token =
+and yy604 (st : tokenizer_state) : token =
   
-    begin match lexeme yyrecord with
+    begin match lexeme st with
     | "#true" -> TRUE
     | "#false" -> FALSE
     | "#null" -> NULL
     | "#inf" -> FLOAT "inf"
     | "#-inf" -> FLOAT "-inf"
     | "#nan" -> FLOAT "nan"
-    | k -> error ("Unknown keyword " ^ k)
+    | k -> error st ("Unknown keyword " ^ k)
     end
 
 
-and yy530 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 7;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy605 (st : tokenizer_state) : token =
+  st.yyaccept <- 7;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy582 [@tailcall]) yyrecord
-    | _ -> (yy531 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy657 [@tailcall]) st
+    | _ -> (yy606 [@tailcall]) st
 
-and yy531 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
-  yyrecord.yytr0 <- yyrecord.yytr0 - 1;
+and yy606 (st : tokenizer_state) : token =
+  st.t1 <- st.yycursor;
+  st.t1 <- st.t1 - 1;
   
-    let hashlen = yyrecord.yytr0 - yyrecord.yytl0 in
-    Buffer.reset yyrecord.info.strbuf;
-    raw_string yyrecord hashlen
+    let hashlen = st.t1 - st.yystart in
+    Buffer.reset st.info.strbuf;
+    raw_string_singleline st hashlen
 
 
-and yy532 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy607 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy530 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy605 [@tailcall]) st
     | '#' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy532 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy607 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy533 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy608 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy527 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy602 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy534 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy609 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy527 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy602 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy535 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy610 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy534 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy609 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy536 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy611 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy534 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy609 [@tailcall]) st
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy583 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy658 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy537 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy612 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy584 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy659 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy585 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy660 [@tailcall]) st
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy534 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy609 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy538 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy613 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy583 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy658 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy534 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy609 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy539 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy614 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy534 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy609 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy540 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy615 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy534 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy609 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy541 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy616 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy534 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy609 [@tailcall]) st
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy586 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy661 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy542 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy617 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy539 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy614 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy543 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy618 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy539 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy614 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy544 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy619 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy539 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy614 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy545 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 8;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy620 (st : tokenizer_state) : token =
+  st.yyaccept <- 8;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -6084,68 +7563,68 @@ and yy545 (yyrecord : tokenizer_yyrecord) : token =
     | '^'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy545 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy620 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy587 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy662 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy588 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy589 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy664 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy590 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy665 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy591 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy666 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy592 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy667 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy593 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy668 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy594 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy669 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy595 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy670 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy596 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy671 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy597 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy672 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy598 [@tailcall]) yyrecord
-    | _ -> (yy546 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy673 [@tailcall]) st
+    | _ -> (yy621 [@tailcall]) st
 
-and yy546 (yyrecord : tokenizer_yyrecord) : token =
+and yy621 (st : tokenizer_state) : token =
   
-    error "Number-like identifiers are invalid and must be quoted"
+    error st "Number-like identifiers are invalid and must be quoted"
 
 
-and yy547 (yyrecord : tokenizer_yyrecord) : token =
-  multiline_comment yyrecord 0; main yyrecord
+and yy622 (st : tokenizer_state) : token =
+  multiline_comment st 0; main st
 
-and yy548 (yyrecord : tokenizer_yyrecord) : token =
+and yy623 (st : tokenizer_state) : token =
   SLASHDASH
 
-and yy549 (yyrecord : tokenizer_yyrecord) : token =
-  singleline_comment yyrecord; NEWLINE
+and yy624 (st : tokenizer_state) : token =
+  singleline_comment st; NEWLINE
 
-and yy550 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 9;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
-  (yy551 [@tailcall]) yyrecord yych
+and yy625 (st : tokenizer_state) : token =
+  st.yyaccept <- 9;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
+  (yy626 [@tailcall]) st yych
 
-and yy551 (yyrecord : tokenizer_yyrecord) (yych : char) : token =
+and yy626 (st : tokenizer_state) (yych : char) : token =
   match yych with
     | '!'
     | '$'..'\''
@@ -6156,514 +7635,514 @@ and yy551 (yyrecord : tokenizer_yyrecord) (yych : char) : token =
     | '^'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy558 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy560 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy635 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy561 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy636 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy562 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy637 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy563 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy565 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy640 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy566 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy641 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy567 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy642 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy568 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy643 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy569 [@tailcall]) yyrecord
-    | _ -> (yy552 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy644 [@tailcall]) st
+    | _ -> (yy627 [@tailcall]) st
 
-and yy552 (yyrecord : tokenizer_yyrecord) : token =
+and yy627 (st : tokenizer_state) : token =
   
-    error @@ sprintf "Invalid number literal %s" (lexeme yyrecord)
+    error st @@ sprintf "Invalid number literal %s" (lexeme st)
 
 
-and yy553 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 9;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy628 (st : tokenizer_state) : token =
+  st.yyaccept <- 9;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy552 [@tailcall]) yyrecord
+    | '\x00' -> (yy627 [@tailcall]) st
     | '0'..'9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy599 [@tailcall]) yyrecord
-    | _ -> (yy551 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy674 [@tailcall]) st
+    | _ -> (yy626 [@tailcall]) st yych
 
-and yy554 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 9;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy629 (st : tokenizer_state) : token =
+  st.yyaccept <- 9;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy552 [@tailcall]) yyrecord
+    | '\x00' -> (yy627 [@tailcall]) st
     | '+'
     | '-' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy601 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy676 [@tailcall]) st
     | '0'..'9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy602 [@tailcall]) yyrecord
-    | _ -> (yy551 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy677 [@tailcall]) st
+    | _ -> (yy626 [@tailcall]) st yych
 
-and yy555 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 9;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy630 (st : tokenizer_state) : token =
+  st.yyaccept <- 9;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy552 [@tailcall]) yyrecord
+    | '\x00' -> (yy627 [@tailcall]) st
     | '0'..'1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy603 [@tailcall]) yyrecord
-    | _ -> (yy551 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy678 [@tailcall]) st
+    | _ -> (yy626 [@tailcall]) st yych
 
-and yy556 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 9;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy631 (st : tokenizer_state) : token =
+  st.yyaccept <- 9;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy552 [@tailcall]) yyrecord
+    | '\x00' -> (yy627 [@tailcall]) st
     | '0'..'7' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy604 [@tailcall]) yyrecord
-    | _ -> (yy551 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy679 [@tailcall]) st
+    | _ -> (yy626 [@tailcall]) st yych
 
-and yy557 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 9;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy632 (st : tokenizer_state) : token =
+  st.yyaccept <- 9;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy552 [@tailcall]) yyrecord
+    | '\x00' -> (yy627 [@tailcall]) st
     | '0'..'9'
     | 'A'..'F'
     | 'a'..'f' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy605 [@tailcall]) yyrecord
-    | _ -> (yy551 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy680 [@tailcall]) st
+    | _ -> (yy626 [@tailcall]) st yych
 
-and yy558 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy633 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy559 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy634 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy560 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy635 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy561 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy636 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy606 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy681 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy562 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy637 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy607 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy682 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy608 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy683 [@tailcall]) st
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy563 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy638 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy606 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy681 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy564 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy639 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy565 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy640 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy566 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy641 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy609 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy684 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy567 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy642 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy568 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy643 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy569 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy644 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy570 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy645 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy571 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy646 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
     | '\x8B'..'\x8D'
     | '\x90'..'\xA7'
     | '\xB0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
     | '\x8E'..'\x8F'
     | '\xAA'..'\xAE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy469 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy544 [@tailcall]) st
     | '\xA8'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy473 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy548 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy572 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy647 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xA5'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
     | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
     | '\xA6'..'\xA9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy469 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy544 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy573 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy648 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
     | '\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy610 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy685 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy574 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy649 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy575 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy650 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy576 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy651 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy471 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy546 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy577 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy652 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy578 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy653 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x8B'..'\x8D'
     | '\x90'..'\xA7'
     | '\xB0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy579 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy654 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xA5'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy580 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy655 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy476 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy551 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy581 (yyrecord : tokenizer_yyrecord) : token =
-  Buffer.reset yyrecord.info.strbuf; string_multiline yyrecord
+and yy656 (st : tokenizer_state) : token =
+  Buffer.reset st.info.strbuf; string_multiline st
 
-and yy582 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy657 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '"' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy611 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy686 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy583 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy658 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy527 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy602 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy584 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy659 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x8B'..'\x8D'
     | '\x90'..'\xA7'
     | '\xB0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy527 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy602 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy585 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy660 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xA5'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy527 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy602 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy586 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy661 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy527 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy602 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy587 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy662 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy545 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy620 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy588 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy663 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy545 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy620 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy589 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy664 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy588 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy590 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy665 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy588 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
     | '\x9A' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy612 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy687 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy591 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy666 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy613 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy688 [@tailcall]) st
     | '\x81' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy614 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy689 [@tailcall]) st
     | '\x82'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy588 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy592 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy667 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy612 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy687 [@tailcall]) st
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy588 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy593 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy668 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy588 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy594 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy669 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy588 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy595 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy670 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy588 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
     | '\xBB' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy615 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy690 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy596 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy671 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy593 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy668 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy597 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy672 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy593 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy668 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy598 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy673 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy593 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy668 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy599 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 10;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy674 (st : tokenizer_state) : token =
+  st.yyaccept <- 10;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -6677,73 +8156,73 @@ and yy599 (yyrecord : tokenizer_yyrecord) : token =
     | 'f'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
     | '0'..'9'
     | '_' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy599 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy674 [@tailcall]) st
     | 'E'
     | 'e' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy554 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy629 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy558 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy560 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy635 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy561 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy636 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy562 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy637 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy563 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy565 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy640 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy566 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy641 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy567 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy642 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy568 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy643 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy569 [@tailcall]) yyrecord
-    | _ -> (yy600 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy644 [@tailcall]) st
+    | _ -> (yy675 [@tailcall]) st
 
-and yy600 (yyrecord : tokenizer_yyrecord) : token =
-  FLOAT (lexeme yyrecord)
+and yy675 (st : tokenizer_state) : token =
+  FLOAT (lexeme st)
 
-and yy601 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 9;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy676 (st : tokenizer_state) : token =
+  st.yyaccept <- 9;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
-    | '\x00' -> (yy552 [@tailcall]) yyrecord
+    | '\x00' -> (yy627 [@tailcall]) st
     | '0'..'9' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy602 [@tailcall]) yyrecord
-    | _ -> (yy551 [@tailcall]) yyrecord yych
+      st.yycursor <- st.yycursor + 1;
+      (yy677 [@tailcall]) st
+    | _ -> (yy626 [@tailcall]) st yych
 
-and yy602 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 10;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy677 (st : tokenizer_state) : token =
+  st.yyaccept <- 10;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -6755,55 +8234,55 @@ and yy602 (yyrecord : tokenizer_yyrecord) : token =
     | '`'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
     | '0'..'9'
     | '_' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy602 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy677 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy558 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy560 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy635 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy561 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy636 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy562 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy637 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy563 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy565 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy640 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy566 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy641 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy567 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy642 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy568 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy643 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy569 [@tailcall]) yyrecord
-    | _ -> (yy600 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy644 [@tailcall]) st
+    | _ -> (yy675 [@tailcall]) st
 
-and yy603 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 4;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy678 (st : tokenizer_state) : token =
+  st.yyaccept <- 4;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -6815,55 +8294,55 @@ and yy603 (yyrecord : tokenizer_yyrecord) : token =
     | '`'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
     | '0'..'1'
     | '_' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy603 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy678 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy558 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy560 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy635 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy561 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy636 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy562 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy637 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy563 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy565 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy640 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy566 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy641 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy567 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy642 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy568 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy643 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy569 [@tailcall]) yyrecord
-    | _ -> (yy488 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy644 [@tailcall]) st
+    | _ -> (yy563 [@tailcall]) st
 
-and yy604 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 4;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy679 (st : tokenizer_state) : token =
+  st.yyaccept <- 4;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -6875,55 +8354,55 @@ and yy604 (yyrecord : tokenizer_yyrecord) : token =
     | '`'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
     | '0'..'7'
     | '_' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy604 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy679 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy558 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy560 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy635 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy561 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy636 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy562 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy637 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy563 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy565 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy640 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy566 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy641 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy567 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy642 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy568 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy643 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy569 [@tailcall]) yyrecord
-    | _ -> (yy488 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy644 [@tailcall]) st
+    | _ -> (yy563 [@tailcall]) st
 
-and yy605 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yyaccept <- 4;
-  yyrecord.yymarker <- yyrecord.yycursor;
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy680 (st : tokenizer_state) : token =
+  st.yyaccept <- 4;
+  st.yymarker <- st.yycursor;
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -6937,155 +8416,154 @@ and yy605 (yyrecord : tokenizer_yyrecord) : token =
     | 'g'..'z'
     | '|'
     | '~' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
     | '0'..'9'
     | 'A'..'F'
     | '_'
     | 'a'..'f' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy605 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy680 [@tailcall]) st
     | '\xC2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy558 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
     | '\xC3'..'\xDF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy559 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy634 [@tailcall]) st
     | '\xE0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy560 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy635 [@tailcall]) st
     | '\xE1' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy561 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy636 [@tailcall]) st
     | '\xE2' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy562 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy637 [@tailcall]) st
     | '\xE3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy563 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy564 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy639 [@tailcall]) st
     | '\xED' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy565 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy640 [@tailcall]) st
     | '\xEF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy566 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy641 [@tailcall]) st
     | '\xF0' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy567 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy642 [@tailcall]) st
     | '\xF1'..'\xF3' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy568 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy643 [@tailcall]) st
     | '\xF4' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy569 [@tailcall]) yyrecord
-    | _ -> (yy488 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy644 [@tailcall]) st
+    | _ -> (yy563 [@tailcall]) st
 
-and yy606 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy681 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy607 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy682 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x8B'..'\x8D'
     | '\x90'..'\xA7'
     | '\xB0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy608 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy683 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xA5'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy609 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy684 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy550 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy625 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy610 (yyrecord : tokenizer_yyrecord) : token =
+and yy685 (st : tokenizer_state) : token =
   BOM
 
-and yy611 (yyrecord : tokenizer_yyrecord) : token =
-  yyrecord.yytl0 <- yyrecord.yyt1;
-  yyrecord.yytr0 <- yyrecord.yycursor;
-  yyrecord.yytr0 <- yyrecord.yytr0 - 3;
+and yy686 (st : tokenizer_state) : token =
+  st.t1 <- st.yycursor;
+  st.t1 <- st.t1 - 3;
   
-    let hashlen = yyrecord.yytr0 - yyrecord.yytl0 in
-    Buffer.reset yyrecord.info.strbuf;
-    raw_string_multiline yyrecord hashlen
+    let hashlen = st.t1 - st.yystart in
+    Buffer.reset st.info.strbuf;
+    raw_string_multiline st hashlen
 
 
-and yy612 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy687 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x81'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy545 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy620 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy613 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy688 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x8B'..'\x8D'
     | '\x90'..'\xA7'
     | '\xB0'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy545 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy620 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy614 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy689 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xA5'
     | '\xAA'..'\xBF' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy545 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy620 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy615 (yyrecord : tokenizer_yyrecord) : token =
-  let yych = get yyrecord.yyinput yyrecord.yycursor in
+and yy690 (st : tokenizer_state) : token =
+  let yych = peek st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
-      yyrecord.yycursor <- yyrecord.yycursor + 1;
-      (yy545 [@tailcall]) yyrecord
-    | _ -> (yy510 [@tailcall]) yyrecord
+      st.yycursor <- st.yycursor + 1;
+      (yy620 [@tailcall]) st
+    | _ -> (yy585 [@tailcall]) st
 
-and yy616 (yyrecord : tokenizer_yyrecord) : token =
+and yy691 (st : tokenizer_state) : token =
   EOF
 
-and main_body (yyrecord : tokenizer_yyrecord) : token =
-  (yy468 [@tailcall]) yyrecord
+and main_body (st : tokenizer_state) : token =
+  (yy543 [@tailcall]) st
 
 
 
-and main (yyrecord : tokenizer_yyrecord) =
-  save_position yyrecord;
-  yyrecord.yystart <- yyrecord.yycursor;
-  main_body yyrecord
+and main st =
+  save_token_position st;
+  save_start_position st;
+  main_body st
 
-let main_tokenizer yyrecord =
+let main_tokenizer st =
   let lexer () =
-    let token = main yyrecord in
-    let start_pos, end_pos = get_location yyrecord in
+    let token = main st in
+    let start_pos, end_pos = get_location st in
     token, start_pos, end_pos
   in
   lexer
