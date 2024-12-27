@@ -6,7 +6,7 @@
 - Reworked numbers: added the `Kdl.Num` module, including
   `Kdl.Num.to_{string,float,int,int32,int64,nativeint}` and other functions.
 - `Kdl.L`: Added `(.@!())` and `(.@!())<-` indexing operators as raising
-  versions of `(.@())` and `(.@()<-)`.
+  versions of `(.@())` and `(.@()<-)`, added `KDL.L.first_arg`.
 - `interpret` now raises `Invalid_annotation` instead of `Failure`.
 - `i8`, `i16`, etc. wrappers over `interpret` have been removed.
 - Dropped support for OCaml < 4.14.0.

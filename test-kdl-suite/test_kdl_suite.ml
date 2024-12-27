@@ -30,6 +30,8 @@ let normalize_numbers =
   in
   map_nodes
 
+let (let@) f x = f x
+
 let run test =
   let failing_test = Filename.check_suffix test "_fail.kdl" in
   let input_file = Filename.concat "test_cases/input" test in
@@ -39,8 +41,8 @@ let run test =
       "[failing]"
     else String.trim (read_file expect_file)
   in
-  let ic = open_in_bin input_file in
-  match Kdl.from_channel ic with
+  let@ ic = In_channel.with_open_bin input_file in
+  match Kdl.of_channel ic with
   | Error _ when failing_test -> `Success
   | Error err ->
     Format.printf "Test %s failed:\n---(error)---\n%a\n---(expected)---\n%s\n\n"

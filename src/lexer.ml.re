@@ -5,20 +5,15 @@ open Parser
 
 let sprintf = Printf.sprintf
 
-(* NOTE: re2c can request a character one position greater than the end of
-   the string ("the sentinel"). In OCaml, strings are always represented with
-   \000 at the end, so to avoid copying, we can use
-   [String.unsafe_get str (String.length str)], which should in fact be safe.
-   The [pos <= String.length str] check is not done here; it is assumed that
-   re2c generates correct code. *)
-let peek = String.unsafe_get
-
 %{conditions %}
 
 type 'a state = {
   info : 'a;
-  yyinput : string;
-  yylimit : int;
+  refill : 'a state -> bool;
+  mutable reached_eof : bool;
+  mutable absolute_offset : int; (* offset of current yyinput *)
+  mutable yyinput : bytes;
+  mutable yylimit : int;
   mutable yystart : int; (* automaton start *)
   mutable yycursor : int;
   mutable yyaccept : int;
@@ -30,13 +25,16 @@ type 'a state = {
 
 type simple_state = unit state
 
-let sub st l r = String.sub st.yyinput l (r - l) [@@inline]
+let substr st l r = Bytes.sub_string st.yyinput l (r - l) [@@inline]
 
-let make_st ?(offset = 0) ~info input = {
+let make_state ~info ~refill ~limit input = {
   info;
+  refill;
+  reached_eof = false;
+  absolute_offset = 0;
   yyinput = input;
-  yylimit = String.length input;
-  yycursor = offset;
+  yylimit = limit;
+  yycursor = 0;
   yystart = 0;
   yyaccept = 0;
   yymarker = 0;
@@ -45,8 +43,17 @@ let make_st ?(offset = 0) ~info input = {
   %{stags format = "\n  @@{tag} = 0;"; %}
 }
 
+let state_of_string ~info str =
+  let refill st = st.reached_eof <- true; false in
+  let limit = String.length str in
+  make_state ~info ~refill ~limit (Bytes.unsafe_of_string str)
+
 type tokenizer_info = {
+  (* filename *)
   fname : string;
+
+  (* below, *lnum and *bol positions are absolute, whereas *cnum (same as
+     yystart and yycursor) is relative to the current buffer *)
 
   (* line number and beginning of line offset for yycursor *)
   mutable lnum : int;
@@ -65,10 +72,8 @@ type tokenizer_info = {
   strbuf : Buffer.t;
 }
 
-type tokenizer_state = tokenizer_info state
-
-let make_tokenizer_state ?(fname = "") input =
-  make_st ~info:{
+let make_tokenizer_info ?(fname = "") () =
+  {
     fname;
     lnum = 1;
     bol = 0;
@@ -78,28 +83,86 @@ let make_tokenizer_state ?(fname = "") input =
     token_lnum = 1;
     token_bol = 0;
     strbuf = Buffer.create 32;
-  } input
+  }
+
+type tokenizer_state = tokenizer_info state
+
+let make_refiller f =
+  let min_avail = 1024 in
+  let refill st =
+    (* Bytes before the token start can be discarded *)
+    let start = st.info.token_cnum in
+    if st.reached_eof then false else begin
+      if Bytes.length st.yyinput - start >= min_avail then
+        (* Shift the buffer *)
+        Bytes.blit st.yyinput start st.yyinput 0 (st.yylimit - start)
+      else begin
+        (* Too long token, grow the buffer *)
+        let newlen = Int.min (Bytes.length st.yyinput lsl 1) Sys.max_string_length in
+        if newlen <= Bytes.length st.yyinput then failwith "Cannot grow buffer";
+        let newbuf = Bytes.create newlen in
+        Bytes.blit st.yyinput start newbuf 0 (st.yylimit - start);
+        st.yyinput <- newbuf;
+      end;
+      (* Update positions *)
+      st.yycursor <- st.yycursor - start;
+      st.yymarker <- st.yymarker - start;
+      st.yylimit <- st.yylimit - start;
+      st.yystart <- st.yystart - start;
+      st.info.token_cnum <- 0;
+      st.absolute_offset <- st.absolute_offset + start;
+      let read =
+        let len = Bytes.length st.yyinput - st.yylimit in
+        f st.yyinput ~offset:st.yylimit ~len
+      in
+      st.yylimit <- st.yylimit + read;
+      if st.yylimit < Bytes.length st.yyinput then
+        Bytes.unsafe_set st.yyinput st.yylimit '\x00';
+      if read <= 0 then
+        (st.reached_eof <- true; false)
+      else true
+    end
+  in refill
+
+let tokenizer_state_of_string ?fname str =
+  state_of_string ~info:(make_tokenizer_info ?fname ()) str
+
+let tokenizer_state_of_fun ?fname f =
+  let len = 2048 in
+  let refill = make_refiller f in
+  let initial_buf = Bytes.create len in
+  (* read initial chunk *)
+  let limit = f initial_buf ~offset:0 ~len in
+  if limit < len then Bytes.unsafe_set initial_buf limit '\x00';
+  make_state ~info:(make_tokenizer_info ?fname ()) ~refill ~limit initial_buf
+
+let tokenizer_state_of_channel ?fname ch =
+  let f buf ~offset ~len = input ch buf offset len in
+  tokenizer_state_of_fun ?fname f
 
 let newline ?(pos = -2) st =
+  let bol = if pos >= 0 then pos else st.yycursor in
   st.info.lnum <- st.info.lnum + 1;
-  st.info.bol <- if pos >= 0 then pos else st.yycursor
+  st.info.bol <- bol + st.absolute_offset
 
 let save_start_position st =
   st.yystart <- st.yycursor;
   st.info.start_lnum <- st.info.lnum;
   st.info.start_bol <- st.info.bol
+[@@inline]
 
 let save_token_position st =
   st.info.token_cnum <- st.yycursor;
   st.info.token_lnum <- st.info.lnum;
   st.info.start_bol <- st.info.bol
+[@@inline]
 
 let make_lexing_token_pos st =
   Lexing.{
     pos_fname = st.info.fname;
     pos_lnum = st.info.token_lnum;
     pos_bol = st.info.token_bol;
-    pos_cnum = st.info.token_cnum;
+    pos_cnum = st.info.token_cnum + st.absolute_offset;
   }
 
 let make_lexing_start_pos st =
@@ -107,7 +170,7 @@ let make_lexing_start_pos st =
     pos_fname = st.info.fname;
     pos_lnum = st.info.start_lnum;
     pos_bol = st.info.start_bol;
-    pos_cnum = st.yystart;
+    pos_cnum = st.yystart + st.absolute_offset;
   }
 
 let make_lexing_end_pos st =
@@ -115,16 +178,16 @@ let make_lexing_end_pos st =
     pos_fname = st.info.fname;
     pos_lnum = st.info.lnum;
     pos_bol = st.info.bol;
-    pos_cnum = st.yycursor;
+    pos_cnum = st.yycursor + st.absolute_offset;
   }
 
 let get_location st = make_lexing_token_pos st, make_lexing_end_pos st
 
-let lexeme st = sub st st.yystart st.yycursor
+let lexeme st = substr st st.yystart st.yycursor
 
-let add_lexeme_substring st strbuf =
+let add_lexeme_to_buf st strbuf =
   let len = st.yycursor - st.yystart in
-  Buffer.add_substring strbuf st.yyinput st.yystart len
+  Buffer.add_subbytes strbuf st.yyinput st.yystart len
 
 let error st msg =
   let start_pos = make_lexing_start_pos st and end_pos = make_lexing_end_pos st in
@@ -132,10 +195,18 @@ let error st msg =
 
 let malformed_utf8 st = error st "Malformed UTF-8"
 
-let rollback_to st (rollback_pos : Lexing.position) =
-  st.yycursor <- rollback_pos.pos_cnum;
+(** Note: rollback can only be guaranteed to work if the previous data is still
+    available, i.e., if we are still lexing the same token *)
+let rollback_to_pos st (rollback_pos : Lexing.position) =
+  let yycursor = rollback_pos.pos_cnum - st.absolute_offset in
+  assert (yycursor >= 0);
+  st.yycursor <- yycursor;
   st.info.bol <- rollback_pos.pos_bol;
   st.info.lnum <- rollback_pos.pos_lnum
+
+(** Move yystart back to the start of the line *)
+let rollback_start_to_newline st =
+  st.yystart <- st.info.start_bol - st.absolute_offset
 
 [@@@warning "-unused-var-strict"]
 
@@ -143,14 +214,14 @@ let rollback_to st (rollback_pos : Lexing.position) =
 [@@@warning "-partial-match"]
 
 %{
-  re2c:tags = 1;
-  re2c:encoding:utf8 = 1;
+  re2c:YYFILL = "st.refill st";
+  re2c:YYPEEK = "Bytes.unsafe_get";
   re2c:encoding-policy = fail; // forbid surrogates
-  re2c:yyfill:enable = 0;
+  re2c:encoding:utf8 = 1;
   re2c:eof = 0;
-  re2c:yyrecord = "st";
   re2c:indent:string = "  ";
-  re2c:YYPEEK = "peek";
+  re2c:tags = 1;
+  re2c:yyrecord = "st";
 
   whitespace_char =
       [\u0009] // Character Tabulation U+0009
@@ -248,7 +319,7 @@ let rollback_to st (rollback_pos : Lexing.position) =
   [\b] { Buffer.add_string strbuf "\\b"; escape_string st strbuf }
   [\f] { Buffer.add_string strbuf "\\f"; escape_string st strbuf }
   disallowed_char {
-    let udecode = String.get_utf_8_uchar st.yyinput st.yystart in
+    let udecode = Bytes.get_utf_8_uchar st.yyinput st.yystart in
     if not (Uchar.utf_decode_is_valid udecode) then
       failwith "Malformed UTF-8";
     let code = Uchar.to_int (Uchar.utf_decode_uchar udecode) in
@@ -257,7 +328,7 @@ let rollback_to st (rollback_pos : Lexing.position) =
   }
   $ { Buffer.contents strbuf }
   [^] {
-    add_lexeme_substring st strbuf;
+    add_lexeme_to_buf st strbuf;
     escape_string st strbuf
   }
   * { failwith "Malformed UTF-8" }
@@ -267,12 +338,14 @@ and escape_string st strbuf =
   st.yystart <- st.yycursor;
   escape_string_body st strbuf
 
-let is_valid_ident str = is_valid_ident (make_st ~info:() str)
-[@@inline]
+let is_valid_ident str =
+  is_valid_ident (state_of_string ~info:() str) [@@inline]
 
 let escape_string = function
   | "" as empty -> empty
-  | str -> escape_string (make_st ~info:() str) (Buffer.create 32)
+  | str -> escape_string (state_of_string ~info:() str) (Buffer.create 32)
+
+(* Tokenizer *)
 
 %{local
   re2c:YYFN = ["multiline_comment;unit", "st;tokenizer_state", "depth;int"];
@@ -345,14 +418,14 @@ let validate_multiline_start st =
   }
   [\\] ("\"" | "\\") { detect_multiline_string_prefix st rollback_pos }
   newline @t1 ws? @t2 ("\\" (ws | newline)+)? "\"\"\"" {
-    rollback_to st rollback_pos;
-    sub st st.t1 st.t2
+    rollback_to_pos st rollback_pos;
+    substr st st.t1 st.t2
   }
   newline { newline st; detect_multiline_string_prefix st rollback_pos }
   // note: this may not fully show the prefix in the error location in case
   // of whitespace escapes
   "\"\"\"" {
-    st.yystart <- st.info.start_bol;
+    rollback_start_to_newline st;
     error st "Invalid multiline string: non-whitespace prefix"
   }
   $ { error st "Unterminated multiline string" }
@@ -372,14 +445,14 @@ and detect_multiline_string_prefix st rollback_pos =
 
   newline @t1 ws? @t2 "\"\"\"" @t3 [#]+ {
     if st.yycursor - st.t3 >= exp_hashlen then begin
-      rollback_to st rollback_pos;
-      sub st st.t1 st.t2
+      rollback_to_pos st rollback_pos;
+      substr st st.t1 st.t2
     end else detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
   }
   newline { newline st; detect_raw_multiline_string_prefix st exp_hashlen rollback_pos }
   "\"\"\"" @t1 [#]+ {
     if st.yycursor - st.t1 >= exp_hashlen then begin
-      st.yystart <- st.info.start_bol;
+      rollback_start_to_newline st;
       error st "Invalid multiline string: non-whitespace prefix"
     end else detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
   }
@@ -396,16 +469,16 @@ let multiline_prefix_check st prefix =
   newline ~pos:t1 st;
   let ws_len = t2 - t1 in
   for i = t1 to t1 + String.length prefix - 1 do
-    let ch = peek yyinput i in
+    let ch = Bytes.unsafe_get yyinput i in
     let prefix_i = i - t1 in
-    if i >= t2 || ch != String.get prefix prefix_i then
+    if i >= t2 || ch != String.unsafe_get prefix prefix_i then
       error st "Invalid multiline string: unmatched whitespace prefix"
   done;
   Buffer.add_char st.info.strbuf '\n';
   let rest_len = ws_len - String.length prefix in
   let rest_start = t1 + String.length prefix in
   if rest_len > 0 then
-    Buffer.add_substring st.info.strbuf yyinput rest_start rest_len
+    Buffer.add_subbytes st.info.strbuf yyinput rest_start rest_len
 
 let multiline_contents strbuf =
   let len = Buffer.length strbuf in
@@ -440,7 +513,7 @@ let multiline_contents strbuf =
     let len = st.t2 - st.t1 in
     if len > 6 then
       error st "Invalid unicode scalar value (too many digits)";
-    let code_str = sub st st.t1 st.t2 in
+    let code_str = substr st st.t1 st.t2 in
     let code = Scanf.sscanf code_str "%X%!" (fun x -> x) in
     if not @@ Uchar.is_valid code then
       error st "Invalid unicode scalar value";
@@ -457,8 +530,8 @@ let multiline_contents strbuf =
   <multi> "\"\"\"" { QUOTED_STRING (multiline_contents st.info.strbuf) }
   <single> "\"" { QUOTED_STRING (Buffer.contents st.info.strbuf) }
   <single, multi> disallowed_char { error st "Illegal character" }
-  <single> any { add_lexeme_substring st st.info.strbuf; yyfnsingle' st prefix }
-  <multi> any { add_lexeme_substring st st.info.strbuf; yyfnmulti' st prefix }
+  <single> any { add_lexeme_to_buf st st.info.strbuf; yyfnsingle' st prefix }
+  <multi> any { add_lexeme_to_buf st st.info.strbuf; yyfnmulti' st prefix }
   <single, multi> $ { error st "Unterminated string" }
   <single, multi> * { malformed_utf8 st }
 %}
@@ -480,7 +553,7 @@ let check_hashlen st exp_hashlen =
   if got_hashlen > exp_hashlen then
     error st (sprintf "Expected %d hash symbol(s), got %d" exp_hashlen got_hashlen)
   else if got_hashlen < exp_hashlen then begin
-    Buffer.add_string st.info.strbuf (lexeme st);
+    add_lexeme_to_buf st st.info.strbuf;
     false
   end else
     true
@@ -513,8 +586,8 @@ let check_hashlen st exp_hashlen =
     else yyfnrsingle' st exp_hashlen prefix
   }
   <rsingle, rmulti> disallowed_char { error st "Illegal character" }
-  <rmulti> any { add_lexeme_substring st st.info.strbuf; yyfnrmulti' st exp_hashlen prefix }
-  <rsingle> any { add_lexeme_substring st st.info.strbuf; yyfnrsingle' st exp_hashlen prefix }
+  <rmulti> any { add_lexeme_to_buf st st.info.strbuf; yyfnrmulti' st exp_hashlen prefix }
+  <rsingle> any { add_lexeme_to_buf st st.info.strbuf; yyfnrsingle' st exp_hashlen prefix }
   <rsingle, rmulti> $ { error st "Unterminated raw string" }
   <rsingle, rmulti> * { malformed_utf8 st }
 %}

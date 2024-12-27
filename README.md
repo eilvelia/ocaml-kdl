@@ -31,7 +31,7 @@ ocaml-kdl for KDL v1, see the `v0.1.0` tag.
 Example:
 
 ```ocaml
-# let kdl = Kdl.from_string {|
+# let kdl = Kdl.of_string {|
     contents {
       section "First section" {
         paragraph "This is the first paragraph"
@@ -90,7 +90,7 @@ using `//` or `|--`:
 Additionaly, type-annotated values can be "interpreted":
 
 ```ocaml
-# let parsed = Kdl.from_string_exn "- (u8)220"
+# let parsed = Kdl.of_string_exn "- (u8)220"
 # Kdl.interpret Kdl.L.(parsed.@!(node "-" // arg 0))
 - : [> Kdl.typed_value ] = `U8 220
 ```

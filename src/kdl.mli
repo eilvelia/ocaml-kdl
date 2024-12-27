@@ -139,26 +139,34 @@ val pp_error : Format.formatter -> error -> unit
 
 exception Parse_error of error
 
-val from_string : ?fname:string -> string -> (t, error) result
+val of_string : ?fname:string -> string -> (t, error) result
 (** Parse KDL from a string. The string should be UTF8-encoded. [?fname] is
     an optional filename that is used in locations. *)
 
-val from_string_exn : ?fname:string -> string -> t
-(** [from_string_exn] is a raising version of [from_string].
+val of_string_exn : ?fname:string -> string -> t
+(** Raising version of [of_string].
 
     @raise Parse_error *)
 
-val from_channel : ?fname:string -> in_channel -> (t, error) result
+val of_channel : ?fname:string -> in_channel -> (t, error) result
 (** Parse KDL from a channel. *)
 
-val from_channel_exn : ?fname:string -> in_channel -> t
-(** @raise Parse_error instead of returning a [result]. *)
+val of_channel_exn : ?fname:string -> in_channel -> t
+(** Raising version of [of_channel].
 
-val of_string : ?fname:string -> string -> (t, error) result
-(** Alias for [from_string]. *)
+    @raise Parse_error *)
 
-val of_string_exn : ?fname:string -> string -> t
-(** Alias for [from_string_exn]. *)
+val of_chunk_gen : ?fname:string -> (bytes -> offset:int -> len:int -> int) -> (t, error) result
+(** [of_chunk_gen ?fname f] is an advanced function that parses KDL from byte
+    chunks written by [f]. The function [f] is similar to
+    {!In_channel.input}; [f] must write no more than [~len] bytes at offset
+    [~offset], returning the amount of written bytes. A return value of 0 means
+    end of input. See also {!Lexing.from_function}. *)
+
+val of_chunk_gen_exn : ?fname:string -> (bytes -> offset:int -> len:int -> int) -> t
+(** Raising version of [of_chunk_gen].
+
+    @raise Parse_error *)
 
 (** {1 Helpers} *)
 
@@ -221,14 +229,14 @@ val pp_node : Format.formatter -> node -> unit
     nodes. *)
 
 val pp_node_compact : Format.formatter -> node -> unit
-(** Same as {!pp_node}, but outputs the result in one line. *)
+(** Same as {!pp_node}, but outputs the result in a single line. *)
 
 val pp : Format.formatter -> t -> unit
 (** Pretty-print a list of nodes or a KDL document using [!indent] as the
     indentation width for children nodes. *)
 
 val pp_compact : Format.formatter -> t -> unit
-(** Same as {!pp}, but outputs the result in one line. *)
+(** Same as {!pp}, but outputs the result in a single line. *)
 
 val to_string : t -> string
 (** Pretty-print a KDL document into a string using {!pp}. *)

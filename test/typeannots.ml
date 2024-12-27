@@ -1,6 +1,6 @@
 let test ?prefix ?(quiet = false) val_string =
   let source = Printf.sprintf "- %s" val_string in
-  let node = List.hd @@ Kdl.from_string_exn source in
+  let node = List.hd @@ Kdl.of_string_exn source in
   let annot_value = List.hd node.args in
   (* Kdl.sexp_of_annot_value annot_value
     |> Sexplib0.Sexp.pp_hum_indent 2 Format.std_formatter; *)
