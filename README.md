@@ -13,9 +13,6 @@ OCaml implementation of the [KDL Document Language][kdl] v2.
 $ opam install kdl
 ```
 
-**Note**: This is the working version for KDL v2. For the published version of
-ocaml-kdl for KDL v1, see the `v0.1.0` tag.
-
 ## Features
 
 - [x] Parsing
@@ -91,7 +88,7 @@ Additionaly, type-annotated values can be "interpreted":
 
 ```ocaml
 # let parsed = Kdl.of_string_exn "- (u8)220"
-# Kdl.interpret Kdl.L.(parsed.@!(node "-" // arg 0))
+# Kdl.interpret Kdl.L.(parsed.@!(node "-" // first_arg))
 - : [> Kdl.typed_value ] = `U8 220
 ```
 

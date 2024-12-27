@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "kdl"
-version: "0.1.0"
+version: "0.2.0"
 synopsis: "OCaml implementation of the KDL Document Language"
 maintainer: "eilvelia <hi@eilvelia.cat>"
 authors: "eilvelia <hi@eilvelia.cat>"
