@@ -5,7 +5,7 @@ synopsis: "OCaml implementation of the KDL Document Language"
 maintainer: "eilvelia <hi@eilvelia.cat>"
 authors: "eilvelia <hi@eilvelia.cat>"
 license: "MPL-2.0"
-tags: ["data-serialization-format" "configuration-format"]
+tags: ["data-serialization-format" "configuration-format" "org:eilvelia"]
 homepage: "https://github.com/eilvelia/ocaml-kdl"
 bug-reports: "https://github.com/eilvelia/ocaml-kdl/issues"
 dev-repo: "git+https://github.com/eilvelia/ocaml-kdl.git"

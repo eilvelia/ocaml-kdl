@@ -83,4 +83,4 @@ build: [
   "@doc" {with-doc}
 ]
 dev-repo: "git+https://github.com/eilvelia/ocaml-kdl.git"
-tags: ["data-serialization-format" "configuration-format"]
+tags: ["data-serialization-format" "configuration-format" "org:eilvelia"]
