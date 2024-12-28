@@ -52,8 +52,8 @@ type tokenizer_info = {
   (* filename *)
   fname : string;
 
-  (* below, *lnum and *bol positions are absolute, whereas *cnum (same as
-     yystart and yycursor) is relative to the current buffer *)
+  (* below, *lnum and *bol positions are absolute, whereas token_cnum (similar
+     to yystart and yycursor) is relative to the current buffer *)
 
   (* line number and beginning of line offset for yycursor *)
   mutable lnum : int;
