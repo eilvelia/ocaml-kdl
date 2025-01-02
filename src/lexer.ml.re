@@ -109,6 +109,8 @@ let make_refiller f =
       st.yymarker <- st.yymarker - start;
       st.yylimit <- st.yylimit - start;
       st.yystart <- st.yystart - start;
+      %{svars format = "\n  st.@@{tag} <- st.@@{tag} - start;"; %}
+      %{stags format = "\n  st.@@{tag} <- st.@@{tag} - start;"; %}
       st.info.token_cnum <- 0;
       st.absolute_offset <- st.absolute_offset + start;
       let read =

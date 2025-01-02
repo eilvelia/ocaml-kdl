@@ -121,6 +121,13 @@ let make_refiller f =
       st.yymarker <- st.yymarker - start;
       st.yylimit <- st.yylimit - start;
       st.yystart <- st.yystart - start;
+      
+  st.t1 <- st.t1 - start;
+  st.t2 <- st.t2 - start;
+  st.t3 <- st.t3 - start;
+      
+  st.yyt1 <- st.yyt1 - start;
+  st.yyt2 <- st.yyt2 - start;
       st.info.token_cnum <- 0;
       st.absolute_offset <- st.absolute_offset + start;
       let read =
