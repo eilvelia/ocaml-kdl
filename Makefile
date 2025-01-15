@@ -2,7 +2,7 @@
 dune-build:
 	dune build @install
 
-# Requires re2c >= 4.0.2 to be installed
+# Requires re2c >= 4.0.2-4fedb068c14c6a7aca023080ab90881af6688ce0 to be installed
 src/lexer.ml: src/lexer.ml.re
 	re2ocaml -W -Wno-nondeterministic-tags --no-generation-date \
 		--conditions -i $< -o $@
@@ -12,7 +12,7 @@ src/lexer.ml: src/lexer.ml.re
 
 # Note: build should be used for development, not for packaging
 .PHONY: build
-build: src/lexer.ml kdl.opam.locked dune-build
+build: src/lexer.ml dune-build
 
 .PHONY: test
 test:
