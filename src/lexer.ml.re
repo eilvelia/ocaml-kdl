@@ -311,8 +311,9 @@ let rollback_start_to_newline st =
 
 %{local
   // Used in pretty-printing
-  re2c:YYFN = ["escape_string_body;string", "st;simple_state", "strbuf;Buffer.t"];
+  re2c:YYFN = ["escape_string;string", "st;simple_state", "strbuf;Buffer.t"];
 
+  ^ { st.yystart <- st.yycursor; }
   [\n] { Buffer.add_string strbuf "\\n"; escape_string st strbuf }
   [\r] { Buffer.add_string strbuf "\\r"; escape_string st strbuf }
   [\t] { Buffer.add_string strbuf "\\t"; escape_string st strbuf }
@@ -336,10 +337,6 @@ let rollback_start_to_newline st =
   * { failwith "Malformed UTF-8" }
 %}
 
-and escape_string st strbuf =
-  st.yystart <- st.yycursor;
-  escape_string_body st strbuf
-
 let is_valid_ident str =
   is_valid_ident (state_of_string ~info:() str) [@@inline]
 
@@ -349,29 +346,35 @@ let escape_string = function
 
 (* Tokenizer *)
 
+%{rules:tokenizer_base
+  ^ { save_start_position st; }
+  * { malformed_utf8 st }
+%}
+
 %{local
   re2c:YYFN = ["multiline_comment;unit", "st;tokenizer_state", "depth;int"];
 
+  !use:tokenizer_base;
   newline { newline st; multiline_comment st depth }
   "/*" { multiline_comment st (depth + 1) }
   "*/" { if depth <= 0 then () else multiline_comment st (depth - 1) }
   $ { error st "Unterminated comment" }
   any { multiline_comment st depth }
-  * { malformed_utf8 st }
 %}
 
 %{local
   re2c:YYFN = ["singleline_comment;unit", "st;tokenizer_state"];
 
+  !use:tokenizer_base;
   newline { newline st }
   $ { () }
   any+ { singleline_comment st }
-  * { malformed_utf8 st }
 %}
 
 %{local
-  re2c:YYFN = ["line_cont_body;unit", "st;tokenizer_state"];
+  re2c:YYFN = ["line_cont;unit", "st;tokenizer_state"];
 
+  !use:tokenizer_base;
   newline { newline st }
   ws { line_cont st }
   "//" { singleline_comment st }
@@ -381,37 +384,33 @@ let escape_string = function
     error st @@
       sprintf "Illegal character '%s' after the '\\' line continuation" (lexeme st)
   }
-  * { malformed_utf8 st }
 %}
-
-and line_cont st = save_start_position st; line_cont_body st
 
 %{
   re2c:YYFN = ["whitespace_escape;unit", "st;tokenizer_state"];
 
+  !use:tokenizer_base;
   newline { newline st; whitespace_escape st }
   ws { whitespace_escape st }
   $ { () }
   "" / (any \ whitespace_char) { () }
-  * { malformed_utf8 st }
 %}
 
 %{local
   re2c:YYFN = ["validate_multiline_start;unit", "st;tokenizer_state"];
+
+  !use:tokenizer_base;
   "" / newline { () }
   $ { error st "A multiline string must start with newline" }
-  * { error st "A multiline string must start with newline" }
+  any { error st "A multiline string must start with newline" }
 %}
-
-let validate_multiline_start st =
-  save_start_position st;
-  validate_multiline_start st
 
 %{local
   // This little time traveling oracle goes to the end of the string, finds
   // the whitespace prefix, and then rollbacks
-  re2c:YYFN = ["detect_multiline_string_prefix_body;string", "st;tokenizer_state", "rollback_pos;Lexing.position"];
+  re2c:YYFN = ["detect_multiline_string_prefix;string", "st;tokenizer_state", "rollback_pos;Lexing.position"];
 
+  !use:tokenizer_base;
   [\\] ws { whitespace_escape st; detect_multiline_string_prefix st rollback_pos }
   [\\] newline {
     newline st;
@@ -434,17 +433,14 @@ let validate_multiline_start st =
   * { detect_multiline_string_prefix st rollback_pos }
 %}
 
-and detect_multiline_string_prefix st rollback_pos =
-  save_start_position st;
-  detect_multiline_string_prefix_body st rollback_pos
-
 %{local
   // Same, but for raw strings
-  re2c:YYFN = ["detect_raw_multiline_string_prefix_body;string",
+  re2c:YYFN = ["detect_raw_multiline_string_prefix;string",
                "st;tokenizer_state",
                "exp_hashlen;int",
                "rollback_pos;Lexing.position"];
 
+  !use:tokenizer_base;
   newline @t1 ws? @t2 "\"\"\"" @t3 [#]+ {
     if st.yycursor - st.t3 >= exp_hashlen then begin
       rollback_to_pos st rollback_pos;
@@ -461,10 +457,6 @@ and detect_multiline_string_prefix st rollback_pos =
   $ { error st "Unterminated raw multiline string" }
   * { detect_raw_multiline_string_prefix st exp_hashlen rollback_pos }
 %}
-
-and detect_raw_multiline_string_prefix st exp_hashlen rollback_pos =
-  save_start_position st;
-  detect_raw_multiline_string_prefix_body st exp_hashlen rollback_pos
 
 let multiline_prefix_check st prefix =
   let { t1; t2; yyinput; _ } = st in
@@ -488,20 +480,21 @@ let multiline_contents strbuf =
   if len <= 1 then "" else Buffer.sub strbuf 1 (len - 2)
 
 %{local
-  re2c:YYFN = ["string_body;token", "st;tokenizer_state", "prefix;string"];
+  re2c:YYFN = ["string;token", "st;tokenizer_state", "prefix;string"];
 
+  <single, multi> ^ { save_start_position st; }
   <multi> newline @t1 ws? / newline {
     newline ~pos:st.t1 st;
     (* Any newline is normalized to \n *)
     Buffer.add_char st.info.strbuf '\n';
     (* Skip lines consisting of any whitespace only (do not check the prefix) *)
-    yyfnmulti' st prefix
+    yyfnmulti st prefix
   }
   <multi> newline @t1 ws? @t2 / (any \ whitespace_char) {
     multiline_prefix_check st prefix;
-    yyfnmulti' st prefix
+    yyfnmulti st prefix
   }
-  <multi> newline { newline st; yyfnmulti' st prefix }
+  <multi> newline { newline st; yyfnmulti st prefix }
   <single> newline { newline st; error st "Unterminated string" }
   <single, multi> "\\n" { Buffer.add_char st.info.strbuf '\n'; string st prefix }
   <single, multi> "\\r" { Buffer.add_char st.info.strbuf '\r'; string st prefix }
@@ -532,15 +525,11 @@ let multiline_contents strbuf =
   <multi> "\"\"\"" { QUOTED_STRING (multiline_contents st.info.strbuf) }
   <single> "\"" { QUOTED_STRING (Buffer.contents st.info.strbuf) }
   <single, multi> disallowed_char { error st "Illegal character" }
-  <single> any { add_lexeme_to_buf st st.info.strbuf; yyfnsingle' st prefix }
-  <multi> any { add_lexeme_to_buf st st.info.strbuf; yyfnmulti' st prefix }
+  <single> any { add_lexeme_to_buf st st.info.strbuf; yyfnsingle st prefix }
+  <multi> any { add_lexeme_to_buf st st.info.strbuf; yyfnmulti st prefix }
   <single, multi> $ { error st "Unterminated string" }
   <single, multi> * { malformed_utf8 st }
 %}
-
-and yyfnsingle' st prefix = save_start_position st; yyfnsingle st prefix
-and yyfnmulti' st prefix = save_start_position st; yyfnmulti st prefix
-and string st prefix = save_start_position st; string_body st prefix
 
 let string_multiline st =
   validate_multiline_start st;
@@ -561,44 +550,39 @@ let check_hashlen st exp_hashlen =
     true
 
 %{local
-  re2c:YYFN = ["raw_string_body;token",
+  re2c:YYFN = ["raw_string;token",
                "st;tokenizer_state",
                "exp_hashlen;int",
                "prefix;string"];
 
+  <rsingle, rmulti> ^ { save_start_position st; }
   <rmulti> newline @t1 ws? / newline {
     newline ~pos:st.t1 st;
     Buffer.add_char st.info.strbuf '\n';
-    yyfnrmulti' st exp_hashlen prefix
+    yyfnrmulti st exp_hashlen prefix
   }
   <rmulti> newline @t1 ws? @t2 / (any \ whitespace_char) {
     multiline_prefix_check st prefix;
-    yyfnrmulti' st exp_hashlen prefix
+    yyfnrmulti st exp_hashlen prefix
   }
-  <rmulti> newline { newline st; yyfnrmulti' st exp_hashlen prefix }
+  <rmulti> newline { newline st; yyfnrmulti st exp_hashlen prefix }
   <rsingle> newline { newline st; error st "Unterminated raw string" }
   <rmulti> "\"\"\"" @t1 [#]+ {
     if check_hashlen st exp_hashlen then begin
       RAW_STRING (multiline_contents st.info.strbuf)
-    end else yyfnrmulti' st exp_hashlen prefix
+    end else yyfnrmulti st exp_hashlen prefix
   }
   <rsingle> "\"" @t1 [#]+ {
     if check_hashlen st exp_hashlen then
       RAW_STRING (Buffer.contents st.info.strbuf)
-    else yyfnrsingle' st exp_hashlen prefix
+    else yyfnrsingle st exp_hashlen prefix
   }
   <rsingle, rmulti> disallowed_char { error st "Illegal character" }
-  <rmulti> any { add_lexeme_to_buf st st.info.strbuf; yyfnrmulti' st exp_hashlen prefix }
-  <rsingle> any { add_lexeme_to_buf st st.info.strbuf; yyfnrsingle' st exp_hashlen prefix }
+  <rmulti> any { add_lexeme_to_buf st st.info.strbuf; yyfnrmulti st exp_hashlen prefix }
+  <rsingle> any { add_lexeme_to_buf st st.info.strbuf; yyfnrsingle st exp_hashlen prefix }
   <rsingle, rmulti> $ { error st "Unterminated raw string" }
   <rsingle, rmulti> * { malformed_utf8 st }
 %}
-
-and yyfnrmulti' st a b = save_start_position st; yyfnrmulti st a b
-and yyfnrsingle' st a b = save_start_position st; yyfnrsingle st a b
-and raw_string st exp_hashlen prefix =
-  save_start_position st;
-  raw_string_body st exp_hashlen prefix
 
 let raw_string_multiline st exp_hashlen =
   validate_multiline_start st;
@@ -611,8 +595,10 @@ let raw_string_singleline st exp_hashlen =
   raw_string st exp_hashlen ""
 
 %{local
-  re2c:YYFN = ["main_body;token", "st;tokenizer_state"];
+  re2c:YYFN = ["main;token", "st;tokenizer_state"];
 
+  !use:tokenizer_base;
+  ^ { save_token_position st; save_start_position st; }
   ws { main st }
   newline { newline st; NEWLINE }
   "//" { singleline_comment st; NEWLINE }
@@ -661,14 +647,8 @@ let raw_string_singleline st exp_hashlen =
     IDENT_STRING (lexeme st)
   }
   $ { EOF }
-  [^] { error st "Illegal character" }
-  * { malformed_utf8 st }
+  any { error st "Illegal character" }
 %}
-
-and main st =
-  save_token_position st;
-  save_start_position st;
-  main_body st
 
 let main_tokenizer st =
   let lexer () =

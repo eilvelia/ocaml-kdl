@@ -250,7 +250,7 @@ let%expect_test "multi-line comments can wrap lines" =
 
 let%expect_test "unterminated multiline comment" =
   test {|- /* comment "/*" */ |};
-  [%expect {| Error: :1:3-1:22: Unterminated comment |}]
+  [%expect {| Error: :1:22-1:22: Unterminated comment |}]
 
 let%expect_test "/- can disable a node as a whole" =
   test {|
