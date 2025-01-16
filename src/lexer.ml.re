@@ -295,15 +295,26 @@ let rollback_start_to_newline st =
 %}
 
 %{local
+  re2c:YYFN = ["is_eof;bool", "st;simple_state"];
+
+  $ { true }
+  * { false }
+%}
+
+%{local
   // Used in pretty-printing
   re2c:YYFN = ["is_valid_ident;bool", "st;simple_state"];
 
-  "true" | "false" | "null" | "inf" | "-inf" | "nan" {
-    not (st.yycursor >= st.yylimit)
+  ("true" | "false" | "null" | "inf" | "-inf" | "nan") @t1 identchar* {
+    if st.t1 >= st.yycursor then
+      false
+    else is_eof st
   }
   sign? "." [0-9] { false }
-  sign (startident identchar*)? | (startident \ sign) identchar* {
-    st.yycursor >= st.yylimit
+  sign |
+  sign startident identchar* |
+  (startident \ sign) identchar* {
+    is_eof st
   }
   $ { false }
   * { false }

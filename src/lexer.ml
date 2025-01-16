@@ -237,6 +237,33 @@ let rollback_start_to_newline st =
 
 let rec yy0 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  if (yych <= '\x00') then (
+    if (st.yylimit <= st.yycursor) then (
+      if (st.refill st) then (yy0 [@tailcall]) st
+      else (yy2 [@tailcall]) st
+    ) else (
+      st.yycursor <- st.yycursor + 1;
+      (yy1 [@tailcall]) st
+    )
+  ) else (
+    st.yycursor <- st.yycursor + 1;
+    (yy1 [@tailcall]) st
+  )
+
+and yy1 (st : simple_state) : bool =
+  false
+
+and yy2 (st : simple_state) : bool =
+  true
+
+and is_eof (st : simple_state) : bool =
+  (yy0 [@tailcall]) st
+
+
+
+
+let rec yy3 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '!'
     | '$'..'\''
@@ -253,87 +280,87 @@ let rec yy0 (st : simple_state) : bool =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
+      (yy6 [@tailcall]) st
     | '+' ->
       st.yycursor <- st.yycursor + 1;
-      (yy6 [@tailcall]) st
+      (yy9 [@tailcall]) st
     | '-' ->
       st.yycursor <- st.yycursor + 1;
-      (yy7 [@tailcall]) st
+      (yy10 [@tailcall]) st
     | '.' ->
       st.yycursor <- st.yycursor + 1;
-      (yy8 [@tailcall]) st
+      (yy11 [@tailcall]) st
     | 'f' ->
       st.yycursor <- st.yycursor + 1;
-      (yy9 [@tailcall]) st
+      (yy12 [@tailcall]) st
     | 'i' ->
       st.yycursor <- st.yycursor + 1;
-      (yy10 [@tailcall]) st
+      (yy13 [@tailcall]) st
     | 'n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy11 [@tailcall]) st
+      (yy14 [@tailcall]) st
     | 't' ->
       st.yycursor <- st.yycursor + 1;
-      (yy12 [@tailcall]) st
+      (yy15 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy13 [@tailcall]) st
+      (yy16 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy14 [@tailcall]) st
+      (yy17 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy15 [@tailcall]) st
+      (yy18 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy16 [@tailcall]) st
+      (yy19 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy17 [@tailcall]) st
+      (yy20 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy18 [@tailcall]) st
+      (yy21 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy19 [@tailcall]) st
+      (yy22 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy20 [@tailcall]) st
+      (yy23 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy21 [@tailcall]) st
+      (yy24 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy22 [@tailcall]) st
+      (yy25 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy23 [@tailcall]) st
+      (yy26 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy24 [@tailcall]) st
+      (yy27 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy0 [@tailcall]) st
-        else (yy54 [@tailcall]) st
+        if (st.refill st) then (yy3 [@tailcall]) st
+        else (yy74 [@tailcall]) st
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy1 [@tailcall]) st
+        (yy4 [@tailcall]) st
       )
 
-and yy1 (st : simple_state) : bool =
-  (yy2 [@tailcall]) st
+and yy4 (st : simple_state) : bool =
+  (yy5 [@tailcall]) st
 
-and yy2 (st : simple_state) : bool =
+and yy5 (st : simple_state) : bool =
   false
 
-and yy3 (st : simple_state) : bool =
+and yy6 (st : simple_state) : bool =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  (yy4 [@tailcall]) st yych
+  (yy7 [@tailcall]) st yych
 
-and yy4 (st : simple_state) (yych : char) : bool =
+and yy7 (st : simple_state) (yych : char) : bool =
   match yych with
     | '!'
     | '$'..'\''
@@ -345,146 +372,95 @@ and yy4 (st : simple_state) (yych : char) : bool =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
+      (yy6 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy25 [@tailcall]) st
+      (yy28 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy30 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy28 [@tailcall]) st
+      (yy31 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy29 [@tailcall]) st
+      (yy32 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy30 [@tailcall]) st
+      (yy33 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy31 [@tailcall]) st
+      (yy34 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy32 [@tailcall]) st
+      (yy35 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy33 [@tailcall]) st
+      (yy36 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy34 [@tailcall]) st
+      (yy37 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy35 [@tailcall]) st
+      (yy38 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy36 [@tailcall]) st
+      (yy39 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy37 [@tailcall]) st
+      (yy40 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy3 [@tailcall]) st
-        else (yy5 [@tailcall]) st
-      ) else (
-        (yy5 [@tailcall]) st
-      )
-
-and yy5 (st : simple_state) : bool =
-  
-    st.yycursor >= st.yylimit
-
-
-and yy6 (st : simple_state) : bool =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00'
-    | '0'..'9' ->
-      if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy6 [@tailcall]) st
-        else (yy5 [@tailcall]) st
+        else (yy8 [@tailcall]) st
       ) else (
-        (yy5 [@tailcall]) st
+        (yy8 [@tailcall]) st
       )
-    | '.' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy8 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
-
-and yy7 (st : simple_state) : bool =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00'
-    | '0'..'9' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy7 [@tailcall]) st
-        else (yy5 [@tailcall]) st
-      ) else (
-        (yy5 [@tailcall]) st
-      )
-    | '.' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy8 [@tailcall]) st
-    | 'i' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy10 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
 
 and yy8 (st : simple_state) : bool =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy8 [@tailcall]) st
-        else (yy5 [@tailcall]) st
-      ) else (
-        (yy5 [@tailcall]) st
-      )
-    | '0'..'9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy38 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+  
+    is_eof st
+
 
 and yy9 (st : simple_state) : bool =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x00' ->
+    | '\x00'
+    | '0'..'9' ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy9 [@tailcall]) st
-        else (yy5 [@tailcall]) st
+        else (yy8 [@tailcall]) st
       ) else (
-        (yy5 [@tailcall]) st
+        (yy8 [@tailcall]) st
       )
-    | 'a' ->
+    | '.' ->
       st.yycursor <- st.yycursor + 1;
-      (yy40 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+      (yy11 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
 
 and yy10 (st : simple_state) : bool =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x00' ->
+    | '\x00'
+    | '0'..'9' ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy10 [@tailcall]) st
-        else (yy5 [@tailcall]) st
+        else (yy8 [@tailcall]) st
       ) else (
-        (yy5 [@tailcall]) st
+        (yy8 [@tailcall]) st
       )
-    | 'n' ->
+    | '.' ->
       st.yycursor <- st.yycursor + 1;
-      (yy41 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+      (yy11 [@tailcall]) st
+    | 'i' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy13 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
 
 and yy11 (st : simple_state) : bool =
   st.yyaccept <- 0;
@@ -494,17 +470,14 @@ and yy11 (st : simple_state) : bool =
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy11 [@tailcall]) st
-        else (yy5 [@tailcall]) st
+        else (yy8 [@tailcall]) st
       ) else (
-        (yy5 [@tailcall]) st
+        (yy8 [@tailcall]) st
       )
-    | 'a' ->
+    | '0'..'9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy42 [@tailcall]) st
-    | 'u' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy43 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+      (yy41 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
 
 and yy12 (st : simple_state) : bool =
   st.yyaccept <- 0;
@@ -514,101 +487,97 @@ and yy12 (st : simple_state) : bool =
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy12 [@tailcall]) st
-        else (yy5 [@tailcall]) st
+        else (yy8 [@tailcall]) st
       ) else (
-        (yy5 [@tailcall]) st
+        (yy8 [@tailcall]) st
+      )
+    | 'a' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy43 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
+
+and yy13 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy13 [@tailcall]) st
+        else (yy8 [@tailcall]) st
+      ) else (
+        (yy8 [@tailcall]) st
+      )
+    | 'n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy44 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
+
+and yy14 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy14 [@tailcall]) st
+        else (yy8 [@tailcall]) st
+      ) else (
+        (yy8 [@tailcall]) st
+      )
+    | 'a' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy45 [@tailcall]) st
+    | 'u' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy46 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
+
+and yy15 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy15 [@tailcall]) st
+        else (yy8 [@tailcall]) st
+      ) else (
+        (yy8 [@tailcall]) st
       )
     | 'r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy44 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+      (yy47 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
 
-and yy13 (st : simple_state) : bool =
+and yy16 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
+      (yy6 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy13 [@tailcall]) st
-        else (yy2 [@tailcall]) st
+        if (st.refill st) then (yy16 [@tailcall]) st
+        else (yy5 [@tailcall]) st
       ) else (
-        (yy2 [@tailcall]) st
+        (yy5 [@tailcall]) st
       )
 
-and yy14 (st : simple_state) : bool =
+and yy17 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy14 [@tailcall]) st
-        else (yy2 [@tailcall]) st
-      ) else (
-        (yy2 [@tailcall]) st
-      )
-
-and yy15 (st : simple_state) : bool =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy15 [@tailcall]) st
-        else (yy2 [@tailcall]) st
-      ) else (
-        (yy2 [@tailcall]) st
-      )
-
-and yy16 (st : simple_state) : bool =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x99'
-    | '\x9B'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy45 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy16 [@tailcall]) st
-        else (yy2 [@tailcall]) st
-      ) else (
-        (yy2 [@tailcall]) st
-      )
-
-and yy17 (st : simple_state) : bool =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy46 [@tailcall]) st
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy47 [@tailcall]) st
-    | '\x82'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy6 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy17 [@tailcall]) st
-        else (yy2 [@tailcall]) st
+        else (yy5 [@tailcall]) st
       ) else (
-        (yy2 [@tailcall]) st
+        (yy5 [@tailcall]) st
       )
 
 and yy18 (st : simple_state) : bool =
@@ -616,18 +585,15 @@ and yy18 (st : simple_state) : bool =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy45 [@tailcall]) st
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy18 [@tailcall]) st
-        else (yy2 [@tailcall]) st
+        else (yy5 [@tailcall]) st
       ) else (
-        (yy2 [@tailcall]) st
+        (yy5 [@tailcall]) st
       )
 
 and yy19 (st : simple_state) : bool =
@@ -635,15 +601,19 @@ and yy19 (st : simple_state) : bool =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBF' ->
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy30 [@tailcall]) st
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy48 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy19 [@tailcall]) st
-        else (yy2 [@tailcall]) st
+        else (yy5 [@tailcall]) st
       ) else (
-        (yy2 [@tailcall]) st
+        (yy5 [@tailcall]) st
       )
 
 and yy20 (st : simple_state) : bool =
@@ -651,15 +621,21 @@ and yy20 (st : simple_state) : bool =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x9F' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy49 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy50 [@tailcall]) st
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy20 [@tailcall]) st
-        else (yy2 [@tailcall]) st
+        else (yy5 [@tailcall]) st
       ) else (
-        (yy2 [@tailcall]) st
+        (yy5 [@tailcall]) st
       )
 
 and yy21 (st : simple_state) : bool =
@@ -667,19 +643,18 @@ and yy21 (st : simple_state) : bool =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBA'
-    | '\xBC'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
-    | '\xBB' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
       (yy48 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy21 [@tailcall]) st
-        else (yy2 [@tailcall]) st
+        else (yy5 [@tailcall]) st
       ) else (
-        (yy2 [@tailcall]) st
+        (yy5 [@tailcall]) st
       )
 
 and yy22 (st : simple_state) : bool =
@@ -687,15 +662,15 @@ and yy22 (st : simple_state) : bool =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x90'..'\xBF' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy32 [@tailcall]) st
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy22 [@tailcall]) st
-        else (yy2 [@tailcall]) st
+        else (yy5 [@tailcall]) st
       ) else (
-        (yy2 [@tailcall]) st
+        (yy5 [@tailcall]) st
       )
 
 and yy23 (st : simple_state) : bool =
@@ -703,15 +678,15 @@ and yy23 (st : simple_state) : bool =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBF' ->
+    | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy32 [@tailcall]) st
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy23 [@tailcall]) st
-        else (yy2 [@tailcall]) st
+        else (yy5 [@tailcall]) st
       ) else (
-        (yy2 [@tailcall]) st
+        (yy5 [@tailcall]) st
       )
 
 and yy24 (st : simple_state) : bool =
@@ -719,213 +694,268 @@ and yy24 (st : simple_state) : bool =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x8F' ->
+    | '\x80'..'\xBA'
+    | '\xBC'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy32 [@tailcall]) st
+      (yy30 [@tailcall]) st
+    | '\xBB' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy51 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy24 [@tailcall]) st
-        else (yy2 [@tailcall]) st
+        else (yy5 [@tailcall]) st
       ) else (
-        (yy2 [@tailcall]) st
+        (yy5 [@tailcall]) st
       )
 
 and yy25 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy35 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy25 [@tailcall]) st
+        else (yy5 [@tailcall]) st
+      ) else (
+        (yy5 [@tailcall]) st
+      )
+
+and yy26 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy35 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy26 [@tailcall]) st
+        else (yy5 [@tailcall]) st
+      ) else (
+        (yy5 [@tailcall]) st
+      )
+
+and yy27 (st : simple_state) : bool =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy35 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy27 [@tailcall]) st
+        else (yy5 [@tailcall]) st
+      ) else (
+        (yy5 [@tailcall]) st
+      )
+
+and yy28 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy25 [@tailcall]) st
-        else (yy26 [@tailcall]) st
-      ) else (
-        (yy26 [@tailcall]) st
-      )
-
-and yy26 (st : simple_state) : bool =
-  st.yycursor <- st.yymarker;
-  match st.yyaccept with
-    | 0 -> (yy5 [@tailcall]) st
-    | 1 -> (yy2 [@tailcall]) st
-    | 2 -> (yy39 [@tailcall]) st
-    | _ -> (yy51 [@tailcall]) st
-
-and yy27 (st : simple_state) : bool =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy27 [@tailcall]) st
-        else (yy26 [@tailcall]) st
-      ) else (
-        (yy26 [@tailcall]) st
-      )
-
-and yy28 (st : simple_state) : bool =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy6 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy28 [@tailcall]) st
-        else (yy26 [@tailcall]) st
+        else (yy29 [@tailcall]) st
       ) else (
-        (yy26 [@tailcall]) st
+        (yy29 [@tailcall]) st
       )
 
 and yy29 (st : simple_state) : bool =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x99'
-    | '\x9B'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy45 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy29 [@tailcall]) st
-        else (yy26 [@tailcall]) st
-      ) else (
-        (yy26 [@tailcall]) st
-      )
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy8 [@tailcall]) st
+    | 1 -> (yy5 [@tailcall]) st
+    | 2 -> (yy42 [@tailcall]) st
+    | 3 ->
+      st.yyt1 <- st.yycursor;
+      (yy54 [@tailcall]) st
+    | _ -> (yy54 [@tailcall]) st
 
 and yy30 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy46 [@tailcall]) st
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy47 [@tailcall]) st
-    | '\x82'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy6 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy30 [@tailcall]) st
-        else (yy26 [@tailcall]) st
+        else (yy29 [@tailcall]) st
       ) else (
-        (yy26 [@tailcall]) st
+        (yy29 [@tailcall]) st
       )
 
 and yy31 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy45 [@tailcall]) st
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy31 [@tailcall]) st
-        else (yy26 [@tailcall]) st
+        else (yy29 [@tailcall]) st
       ) else (
-        (yy26 [@tailcall]) st
+        (yy29 [@tailcall]) st
       )
 
 and yy32 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBF' ->
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy30 [@tailcall]) st
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy48 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy32 [@tailcall]) st
-        else (yy26 [@tailcall]) st
+        else (yy29 [@tailcall]) st
       ) else (
-        (yy26 [@tailcall]) st
+        (yy29 [@tailcall]) st
       )
 
 and yy33 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x9F' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
+      (yy49 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy50 [@tailcall]) st
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy33 [@tailcall]) st
-        else (yy26 [@tailcall]) st
+        else (yy29 [@tailcall]) st
       ) else (
-        (yy26 [@tailcall]) st
+        (yy29 [@tailcall]) st
       )
 
 and yy34 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBA'
-    | '\xBC'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy27 [@tailcall]) st
-    | '\xBB' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
       (yy48 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy34 [@tailcall]) st
-        else (yy26 [@tailcall]) st
+        else (yy29 [@tailcall]) st
       ) else (
-        (yy26 [@tailcall]) st
+        (yy29 [@tailcall]) st
       )
 
 and yy35 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x90'..'\xBF' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy32 [@tailcall]) st
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy35 [@tailcall]) st
-        else (yy26 [@tailcall]) st
+        else (yy29 [@tailcall]) st
       ) else (
-        (yy26 [@tailcall]) st
+        (yy29 [@tailcall]) st
       )
 
 and yy36 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBF' ->
+    | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy32 [@tailcall]) st
+      (yy30 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy36 [@tailcall]) st
-        else (yy26 [@tailcall]) st
+        else (yy29 [@tailcall]) st
       ) else (
-        (yy26 [@tailcall]) st
+        (yy29 [@tailcall]) st
       )
 
 and yy37 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x8F' ->
+    | '\x80'..'\xBA'
+    | '\xBC'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy32 [@tailcall]) st
+      (yy30 [@tailcall]) st
+    | '\xBB' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy51 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy37 [@tailcall]) st
-        else (yy26 [@tailcall]) st
+        else (yy29 [@tailcall]) st
       ) else (
-        (yy26 [@tailcall]) st
+        (yy29 [@tailcall]) st
       )
 
 and yy38 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy35 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy38 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy39 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy35 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy39 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy40 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy35 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy40 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy41 (st : simple_state) : bool =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -939,68 +969,17 @@ and yy38 (st : simple_state) : bool =
     | '^'..'z'
     | '|'
     | '~'
-    | '\xC2'..'\xF4' -> (yy4 [@tailcall]) st yych
+    | '\xC2'..'\xF4' -> (yy7 [@tailcall]) st yych
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy38 [@tailcall]) st
-        else (yy39 [@tailcall]) st
-      ) else (
-        (yy39 [@tailcall]) st
-      )
-
-and yy39 (st : simple_state) : bool =
-  false
-
-and yy40 (st : simple_state) : bool =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy40 [@tailcall]) st
-        else (yy5 [@tailcall]) st
-      ) else (
-        (yy5 [@tailcall]) st
-      )
-    | 'l' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy49 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
-
-and yy41 (st : simple_state) : bool =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00' ->
-      if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy41 [@tailcall]) st
-        else (yy5 [@tailcall]) st
+        else (yy42 [@tailcall]) st
       ) else (
-        (yy5 [@tailcall]) st
+        (yy42 [@tailcall]) st
       )
-    | 'f' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy50 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
 
 and yy42 (st : simple_state) : bool =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy42 [@tailcall]) st
-        else (yy5 [@tailcall]) st
-      ) else (
-        (yy5 [@tailcall]) st
-      )
-    | 'n' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy50 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+  false
 
 and yy43 (st : simple_state) : bool =
   st.yyaccept <- 0;
@@ -1010,14 +989,14 @@ and yy43 (st : simple_state) : bool =
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy43 [@tailcall]) st
-        else (yy5 [@tailcall]) st
+        else (yy8 [@tailcall]) st
       ) else (
-        (yy5 [@tailcall]) st
+        (yy8 [@tailcall]) st
       )
     | 'l' ->
       st.yycursor <- st.yycursor + 1;
       (yy52 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+    | _ -> (yy7 [@tailcall]) st yych
 
 and yy44 (st : simple_state) : bool =
   st.yyaccept <- 0;
@@ -1027,94 +1006,249 @@ and yy44 (st : simple_state) : bool =
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy44 [@tailcall]) st
-        else (yy5 [@tailcall]) st
+        else (yy8 [@tailcall]) st
       ) else (
-        (yy5 [@tailcall]) st
+        (yy8 [@tailcall]) st
       )
-    | 'u' ->
+    | 'f' ->
       st.yycursor <- st.yycursor + 1;
       (yy53 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+    | _ -> (yy7 [@tailcall]) st yych
 
 and yy45 (st : simple_state) : bool =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy45 [@tailcall]) st
-        else (yy26 [@tailcall]) st
-      ) else (
-        (yy26 [@tailcall]) st
-      )
-
-and yy46 (st : simple_state) : bool =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x8B'..'\x8D'
-    | '\x90'..'\xA7'
-    | '\xB0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy46 [@tailcall]) st
-        else (yy26 [@tailcall]) st
-      ) else (
-        (yy26 [@tailcall]) st
-      )
-
-and yy47 (st : simple_state) : bool =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9E'
-    | '\xA0'..'\xA5'
-    | '\xAA'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy47 [@tailcall]) st
-        else (yy26 [@tailcall]) st
-      ) else (
-        (yy26 [@tailcall]) st
-      )
-
-and yy48 (st : simple_state) : bool =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy3 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy48 [@tailcall]) st
-        else (yy26 [@tailcall]) st
-      ) else (
-        (yy26 [@tailcall]) st
-      )
-
-and yy49 (st : simple_state) : bool =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy49 [@tailcall]) st
-        else (yy5 [@tailcall]) st
+        if (st.refill st) then (yy45 [@tailcall]) st
+        else (yy8 [@tailcall]) st
       ) else (
-        (yy5 [@tailcall]) st
+        (yy8 [@tailcall]) st
+      )
+    | 'n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy53 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
+
+and yy46 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy46 [@tailcall]) st
+        else (yy8 [@tailcall]) st
+      ) else (
+        (yy8 [@tailcall]) st
+      )
+    | 'l' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy55 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
+
+and yy47 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy47 [@tailcall]) st
+        else (yy8 [@tailcall]) st
+      ) else (
+        (yy8 [@tailcall]) st
+      )
+    | 'u' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy56 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
+
+and yy48 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy6 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy48 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy49 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x8B'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy6 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy49 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy50 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xA5'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy6 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy50 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy51 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy6 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy51 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy52 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy52 [@tailcall]) st
+        else (yy8 [@tailcall]) st
+      ) else (
+        (yy8 [@tailcall]) st
       )
     | 's' ->
       st.yycursor <- st.yycursor + 1;
-      (yy53 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+      (yy56 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
 
-and yy50 (st : simple_state) : bool =
+and yy53 (st : simple_state) : bool =
   st.yyaccept <- 3;
+  st.yymarker <- st.yycursor;
+  st.yyt1 <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '!'
+    | '$'..'\''
+    | '*'..'.'
+    | '0'..':'
+    | '<'
+    | '>'..'Z'
+    | '^'..'z'
+    | '|'
+    | '~' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy57 [@tailcall]) st
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy58 [@tailcall]) st
+    | '\xC3'..'\xDF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st
+    | '\xE0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy60 [@tailcall]) st
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy61 [@tailcall]) st
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy62 [@tailcall]) st
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy63 [@tailcall]) st
+    | '\xE4'..'\xEC'
+    | '\xEE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy64 [@tailcall]) st
+    | '\xED' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy65 [@tailcall]) st
+    | '\xEF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy66 [@tailcall]) st
+    | '\xF0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy67 [@tailcall]) st
+    | '\xF1'..'\xF3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy68 [@tailcall]) st
+    | '\xF4' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy69 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy53 [@tailcall]) st
+        else (yy54 [@tailcall]) st
+      ) else (
+        (yy54 [@tailcall]) st
+      )
+
+and yy54 (st : simple_state) : bool =
+  st.t1 <- st.yyt1;
+  
+    if st.t1 >= st.yycursor then
+      false
+    else is_eof st
+
+
+and yy55 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy55 [@tailcall]) st
+        else (yy8 [@tailcall]) st
+      ) else (
+        (yy8 [@tailcall]) st
+      )
+    | 'l' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy53 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
+
+and yy56 (st : simple_state) : bool =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy56 [@tailcall]) st
+        else (yy8 [@tailcall]) st
+      ) else (
+        (yy8 [@tailcall]) st
+      )
+    | 'e' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy53 [@tailcall]) st
+    | _ -> (yy7 [@tailcall]) st yych
+
+and yy57 (st : simple_state) : bool =
+  st.yyaccept <- 4;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
@@ -1126,69 +1260,315 @@ and yy50 (st : simple_state) : bool =
     | '>'..'Z'
     | '^'..'z'
     | '|'
-    | '~'
-    | '\xC2'..'\xF4' -> (yy4 [@tailcall]) st yych
+    | '~' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy57 [@tailcall]) st
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy58 [@tailcall]) st
+    | '\xC3'..'\xDF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st
+    | '\xE0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy60 [@tailcall]) st
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy61 [@tailcall]) st
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy62 [@tailcall]) st
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy63 [@tailcall]) st
+    | '\xE4'..'\xEC'
+    | '\xEE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy64 [@tailcall]) st
+    | '\xED' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy65 [@tailcall]) st
+    | '\xEF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy66 [@tailcall]) st
+    | '\xF0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy67 [@tailcall]) st
+    | '\xF1'..'\xF3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy68 [@tailcall]) st
+    | '\xF4' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy69 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy50 [@tailcall]) st
-        else (yy51 [@tailcall]) st
+        if (st.refill st) then (yy57 [@tailcall]) st
+        else (yy54 [@tailcall]) st
       ) else (
-        (yy51 [@tailcall]) st
+        (yy54 [@tailcall]) st
       )
 
-and yy51 (st : simple_state) : bool =
-  
-    not (st.yycursor >= st.yylimit)
-
-
-and yy52 (st : simple_state) : bool =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
+and yy58 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x00' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy52 [@tailcall]) st
-        else (yy5 [@tailcall]) st
-      ) else (
-        (yy5 [@tailcall]) st
-      )
-    | 'l' ->
+    | '\x80'..'\x84'
+    | '\x86'..'\x9F'
+    | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy50 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+      (yy57 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy58 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
 
-and yy53 (st : simple_state) : bool =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
+and yy59 (st : simple_state) : bool =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x00' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy53 [@tailcall]) st
-        else (yy5 [@tailcall]) st
-      ) else (
-        (yy5 [@tailcall]) st
-      )
-    | 'e' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy50 [@tailcall]) st
-    | _ -> (yy4 [@tailcall]) st yych
+      (yy57 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy59 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
 
-and yy54 (st : simple_state) : bool =
+and yy60 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy60 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy61 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy70 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy61 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy62 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy71 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy72 [@tailcall]) st
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy62 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy63 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy70 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy63 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy64 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy64 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy65 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy65 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy66 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBA'
+    | '\xBC'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy59 [@tailcall]) st
+    | '\xBB' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy73 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy66 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy67 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy64 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy67 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy68 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy64 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy68 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy69 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy64 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy69 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy70 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy57 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy70 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy71 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x8B'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy57 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy71 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy72 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xA5'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy57 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy72 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy73 (st : simple_state) : bool =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy57 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy73 [@tailcall]) st
+        else (yy29 [@tailcall]) st
+      ) else (
+        (yy29 [@tailcall]) st
+      )
+
+and yy74 (st : simple_state) : bool =
   false
 
 and is_valid_ident (st : simple_state) : bool =
-  (yy0 [@tailcall]) st
+  (yy3 [@tailcall]) st
 
 
 
 
-let rec yy55 (st : simple_state) (strbuf : Buffer.t) : string =
+let rec yy75 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yystart <- st.yycursor;
-  (yy56 [@tailcall]) st strbuf
+  (yy76 [@tailcall]) st strbuf
 
-and yy56 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy76 (st : simple_state) (strbuf : Buffer.t) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -1196,73 +1576,73 @@ and yy56 (st : simple_state) (strbuf : Buffer.t) : string =
     | '\x0E'..'\x1F'
     | '\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy56 [@tailcall]) st strbuf
-        else (yy83 [@tailcall]) st strbuf
+        if (st.refill st) then (yy76 [@tailcall]) st strbuf
+        else (yy103 [@tailcall]) st strbuf
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy57 [@tailcall]) st strbuf
+        (yy77 [@tailcall]) st strbuf
       )
     | '\b' ->
       st.yycursor <- st.yycursor + 1;
-      (yy58 [@tailcall]) st strbuf
+      (yy78 [@tailcall]) st strbuf
     | '\t' ->
       st.yycursor <- st.yycursor + 1;
-      (yy59 [@tailcall]) st strbuf
+      (yy79 [@tailcall]) st strbuf
     | '\n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy60 [@tailcall]) st strbuf
+      (yy80 [@tailcall]) st strbuf
     | '\x0B'
     | ' '..'!'
     | '#'..'['
     | ']'..'~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy61 [@tailcall]) st strbuf
+      (yy81 [@tailcall]) st strbuf
     | '\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy62 [@tailcall]) st strbuf
+      (yy82 [@tailcall]) st strbuf
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy63 [@tailcall]) st strbuf
+      (yy83 [@tailcall]) st strbuf
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy64 [@tailcall]) st strbuf
+      (yy84 [@tailcall]) st strbuf
     | '\\' ->
       st.yycursor <- st.yycursor + 1;
-      (yy65 [@tailcall]) st strbuf
+      (yy85 [@tailcall]) st strbuf
     | '\xC2'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy68 [@tailcall]) st strbuf
+      (yy88 [@tailcall]) st strbuf
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy69 [@tailcall]) st strbuf
+      (yy89 [@tailcall]) st strbuf
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy70 [@tailcall]) st strbuf
+      (yy90 [@tailcall]) st strbuf
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy71 [@tailcall]) st strbuf
+      (yy91 [@tailcall]) st strbuf
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy72 [@tailcall]) st strbuf
+      (yy92 [@tailcall]) st strbuf
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy73 [@tailcall]) st strbuf
+      (yy93 [@tailcall]) st strbuf
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy74 [@tailcall]) st strbuf
+      (yy94 [@tailcall]) st strbuf
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy75 [@tailcall]) st strbuf
+      (yy95 [@tailcall]) st strbuf
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy76 [@tailcall]) st strbuf
+      (yy96 [@tailcall]) st strbuf
     | _ ->
       st.yycursor <- st.yycursor + 1;
-      (yy66 [@tailcall]) st strbuf
+      (yy86 [@tailcall]) st strbuf
 
-and yy57 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy77 (st : simple_state) (strbuf : Buffer.t) : string =
   
     let udecode = Bytes.get_utf_8_uchar st.yyinput st.yystart in
     if not (Uchar.utf_decode_is_valid udecode) then
@@ -1272,275 +1652,275 @@ and yy57 (st : simple_state) (strbuf : Buffer.t) : string =
     escape_string st strbuf
 
 
-and yy58 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy78 (st : simple_state) (strbuf : Buffer.t) : string =
   Buffer.add_string strbuf "\\b"; escape_string st strbuf
 
-and yy59 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy79 (st : simple_state) (strbuf : Buffer.t) : string =
   Buffer.add_string strbuf "\\t"; escape_string st strbuf
 
-and yy60 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy80 (st : simple_state) (strbuf : Buffer.t) : string =
   Buffer.add_string strbuf "\\n"; escape_string st strbuf
 
-and yy61 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy81 (st : simple_state) (strbuf : Buffer.t) : string =
   
     add_lexeme_to_buf st strbuf;
     escape_string st strbuf
 
 
-and yy62 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy82 (st : simple_state) (strbuf : Buffer.t) : string =
   Buffer.add_string strbuf "\\f"; escape_string st strbuf
 
-and yy63 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy83 (st : simple_state) (strbuf : Buffer.t) : string =
   Buffer.add_string strbuf "\\r"; escape_string st strbuf
 
-and yy64 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy84 (st : simple_state) (strbuf : Buffer.t) : string =
   Buffer.add_string strbuf "\\\""; escape_string st strbuf
 
-and yy65 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy85 (st : simple_state) (strbuf : Buffer.t) : string =
   Buffer.add_string strbuf "\\\\"; escape_string st strbuf
 
-and yy66 (st : simple_state) (strbuf : Buffer.t) : string =
-  (yy67 [@tailcall]) st strbuf
+and yy86 (st : simple_state) (strbuf : Buffer.t) : string =
+  (yy87 [@tailcall]) st strbuf
 
-and yy67 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy87 (st : simple_state) (strbuf : Buffer.t) : string =
   failwith "Malformed UTF-8"
 
-and yy68 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy88 (st : simple_state) (strbuf : Buffer.t) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy61 [@tailcall]) st strbuf
+      (yy81 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy68 [@tailcall]) st strbuf
-        else (yy67 [@tailcall]) st strbuf
+        if (st.refill st) then (yy88 [@tailcall]) st strbuf
+        else (yy87 [@tailcall]) st strbuf
       ) else (
-        (yy67 [@tailcall]) st strbuf
+        (yy87 [@tailcall]) st strbuf
       )
 
-and yy69 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy89 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy77 [@tailcall]) st strbuf
+      (yy97 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy69 [@tailcall]) st strbuf
-        else (yy67 [@tailcall]) st strbuf
+        if (st.refill st) then (yy89 [@tailcall]) st strbuf
+        else (yy87 [@tailcall]) st strbuf
       ) else (
-        (yy67 [@tailcall]) st strbuf
+        (yy87 [@tailcall]) st strbuf
       )
 
-and yy70 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy90 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy77 [@tailcall]) st strbuf
+      (yy97 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy70 [@tailcall]) st strbuf
-        else (yy67 [@tailcall]) st strbuf
+        if (st.refill st) then (yy90 [@tailcall]) st strbuf
+        else (yy87 [@tailcall]) st strbuf
       ) else (
-        (yy67 [@tailcall]) st strbuf
+        (yy87 [@tailcall]) st strbuf
       )
 
-and yy71 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy91 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy79 [@tailcall]) st strbuf
+      (yy99 [@tailcall]) st strbuf
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy80 [@tailcall]) st strbuf
+      (yy100 [@tailcall]) st strbuf
     | '\x82'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy77 [@tailcall]) st strbuf
+      (yy97 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy71 [@tailcall]) st strbuf
-        else (yy67 [@tailcall]) st strbuf
+        if (st.refill st) then (yy91 [@tailcall]) st strbuf
+        else (yy87 [@tailcall]) st strbuf
       ) else (
-        (yy67 [@tailcall]) st strbuf
+        (yy87 [@tailcall]) st strbuf
       )
 
-and yy72 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy92 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy77 [@tailcall]) st strbuf
+      (yy97 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy72 [@tailcall]) st strbuf
-        else (yy67 [@tailcall]) st strbuf
+        if (st.refill st) then (yy92 [@tailcall]) st strbuf
+        else (yy87 [@tailcall]) st strbuf
       ) else (
-        (yy67 [@tailcall]) st strbuf
+        (yy87 [@tailcall]) st strbuf
       )
 
-and yy73 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy93 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy77 [@tailcall]) st strbuf
+      (yy97 [@tailcall]) st strbuf
     | '\xBB' ->
       st.yycursor <- st.yycursor + 1;
-      (yy81 [@tailcall]) st strbuf
+      (yy101 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy73 [@tailcall]) st strbuf
-        else (yy67 [@tailcall]) st strbuf
+        if (st.refill st) then (yy93 [@tailcall]) st strbuf
+        else (yy87 [@tailcall]) st strbuf
       ) else (
-        (yy67 [@tailcall]) st strbuf
+        (yy87 [@tailcall]) st strbuf
       )
 
-and yy74 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy94 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy82 [@tailcall]) st strbuf
+      (yy102 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy74 [@tailcall]) st strbuf
-        else (yy67 [@tailcall]) st strbuf
+        if (st.refill st) then (yy94 [@tailcall]) st strbuf
+        else (yy87 [@tailcall]) st strbuf
       ) else (
-        (yy67 [@tailcall]) st strbuf
+        (yy87 [@tailcall]) st strbuf
       )
 
-and yy75 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy95 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy82 [@tailcall]) st strbuf
+      (yy102 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy75 [@tailcall]) st strbuf
-        else (yy67 [@tailcall]) st strbuf
+        if (st.refill st) then (yy95 [@tailcall]) st strbuf
+        else (yy87 [@tailcall]) st strbuf
       ) else (
-        (yy67 [@tailcall]) st strbuf
+        (yy87 [@tailcall]) st strbuf
       )
 
-and yy76 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy96 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy82 [@tailcall]) st strbuf
+      (yy102 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy76 [@tailcall]) st strbuf
-        else (yy67 [@tailcall]) st strbuf
+        if (st.refill st) then (yy96 [@tailcall]) st strbuf
+        else (yy87 [@tailcall]) st strbuf
       ) else (
-        (yy67 [@tailcall]) st strbuf
+        (yy87 [@tailcall]) st strbuf
       )
 
-and yy77 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy97 (st : simple_state) (strbuf : Buffer.t) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy61 [@tailcall]) st strbuf
+      (yy81 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy77 [@tailcall]) st strbuf
-        else (yy78 [@tailcall]) st strbuf
+        if (st.refill st) then (yy97 [@tailcall]) st strbuf
+        else (yy98 [@tailcall]) st strbuf
       ) else (
-        (yy78 [@tailcall]) st strbuf
+        (yy98 [@tailcall]) st strbuf
       )
 
-and yy78 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy98 (st : simple_state) (strbuf : Buffer.t) : string =
   st.yycursor <- st.yymarker;
-  (yy67 [@tailcall]) st strbuf
+  (yy87 [@tailcall]) st strbuf
 
-and yy79 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy99 (st : simple_state) (strbuf : Buffer.t) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8D'
     | '\x90'..'\xA9'
     | '\xAF'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy61 [@tailcall]) st strbuf
+      (yy81 [@tailcall]) st strbuf
     | '\x8E'..'\x8F'
     | '\xAA'..'\xAE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy57 [@tailcall]) st strbuf
+      (yy77 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy79 [@tailcall]) st strbuf
-        else (yy78 [@tailcall]) st strbuf
+        if (st.refill st) then (yy99 [@tailcall]) st strbuf
+        else (yy98 [@tailcall]) st strbuf
       ) else (
-        (yy78 [@tailcall]) st strbuf
+        (yy98 [@tailcall]) st strbuf
       )
 
-and yy80 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy100 (st : simple_state) (strbuf : Buffer.t) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA5'
     | '\xAA'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy61 [@tailcall]) st strbuf
+      (yy81 [@tailcall]) st strbuf
     | '\xA6'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy57 [@tailcall]) st strbuf
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy80 [@tailcall]) st strbuf
-        else (yy78 [@tailcall]) st strbuf
-      ) else (
-        (yy78 [@tailcall]) st strbuf
-      )
-
-and yy81 (st : simple_state) (strbuf : Buffer.t) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy61 [@tailcall]) st strbuf
-    | '\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy57 [@tailcall]) st strbuf
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy81 [@tailcall]) st strbuf
-        else (yy78 [@tailcall]) st strbuf
-      ) else (
-        (yy78 [@tailcall]) st strbuf
-      )
-
-and yy82 (st : simple_state) (strbuf : Buffer.t) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
       (yy77 [@tailcall]) st strbuf
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy82 [@tailcall]) st strbuf
-        else (yy78 [@tailcall]) st strbuf
+        if (st.refill st) then (yy100 [@tailcall]) st strbuf
+        else (yy98 [@tailcall]) st strbuf
       ) else (
-        (yy78 [@tailcall]) st strbuf
+        (yy98 [@tailcall]) st strbuf
       )
 
-and yy83 (st : simple_state) (strbuf : Buffer.t) : string =
+and yy101 (st : simple_state) (strbuf : Buffer.t) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy81 [@tailcall]) st strbuf
+    | '\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy77 [@tailcall]) st strbuf
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy101 [@tailcall]) st strbuf
+        else (yy98 [@tailcall]) st strbuf
+      ) else (
+        (yy98 [@tailcall]) st strbuf
+      )
+
+and yy102 (st : simple_state) (strbuf : Buffer.t) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy97 [@tailcall]) st strbuf
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy102 [@tailcall]) st strbuf
+        else (yy98 [@tailcall]) st strbuf
+      ) else (
+        (yy98 [@tailcall]) st strbuf
+      )
+
+and yy103 (st : simple_state) (strbuf : Buffer.t) : string =
   Buffer.contents strbuf
 
 and escape_string (st : simple_state) (strbuf : Buffer.t) : string =
-  (yy55 [@tailcall]) st strbuf
+  (yy75 [@tailcall]) st strbuf
 
 
 
@@ -1556,11 +1936,11 @@ let escape_string = function
 
 
 
-let rec yy84 (st : tokenizer_state) (depth : int) : unit =
+let rec yy104 (st : tokenizer_state) (depth : int) : unit =
   save_start_position st;
-  (yy85 [@tailcall]) st depth
+  (yy105 [@tailcall]) st depth
 
-and yy85 (st : tokenizer_state) (depth : int) : unit =
+and yy105 (st : tokenizer_state) (depth : int) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -1569,300 +1949,264 @@ and yy85 (st : tokenizer_state) (depth : int) : unit =
     | '+'..'.'
     | '0'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy85 [@tailcall]) st depth
-        else (yy110 [@tailcall]) st depth
+        if (st.refill st) then (yy105 [@tailcall]) st depth
+        else (yy130 [@tailcall]) st depth
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy86 [@tailcall]) st depth
+        (yy106 [@tailcall]) st depth
       )
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy88 [@tailcall]) st depth
+      (yy108 [@tailcall]) st depth
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy90 [@tailcall]) st depth
+      (yy110 [@tailcall]) st depth
     | '*' ->
       st.yycursor <- st.yycursor + 1;
-      (yy91 [@tailcall]) st depth
+      (yy111 [@tailcall]) st depth
     | '/' ->
       st.yycursor <- st.yycursor + 1;
-      (yy92 [@tailcall]) st depth
+      (yy112 [@tailcall]) st depth
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy95 [@tailcall]) st depth
+      (yy115 [@tailcall]) st depth
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy96 [@tailcall]) st depth
+      (yy116 [@tailcall]) st depth
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy97 [@tailcall]) st depth
+      (yy117 [@tailcall]) st depth
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy98 [@tailcall]) st depth
+      (yy118 [@tailcall]) st depth
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy99 [@tailcall]) st depth
+      (yy119 [@tailcall]) st depth
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy100 [@tailcall]) st depth
+      (yy120 [@tailcall]) st depth
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy101 [@tailcall]) st depth
+      (yy121 [@tailcall]) st depth
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy102 [@tailcall]) st depth
+      (yy122 [@tailcall]) st depth
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy103 [@tailcall]) st depth
+      (yy123 [@tailcall]) st depth
     | _ ->
       st.yycursor <- st.yycursor + 1;
-      (yy93 [@tailcall]) st depth
+      (yy113 [@tailcall]) st depth
 
-and yy86 (st : tokenizer_state) (depth : int) : unit =
-  (yy87 [@tailcall]) st depth
+and yy106 (st : tokenizer_state) (depth : int) : unit =
+  (yy107 [@tailcall]) st depth
 
-and yy87 (st : tokenizer_state) (depth : int) : unit =
+and yy107 (st : tokenizer_state) (depth : int) : unit =
   multiline_comment st depth
 
-and yy88 (st : tokenizer_state) (depth : int) : unit =
-  (yy89 [@tailcall]) st depth
+and yy108 (st : tokenizer_state) (depth : int) : unit =
+  (yy109 [@tailcall]) st depth
 
-and yy89 (st : tokenizer_state) (depth : int) : unit =
+and yy109 (st : tokenizer_state) (depth : int) : unit =
   newline st; multiline_comment st depth
 
-and yy90 (st : tokenizer_state) (depth : int) : unit =
+and yy110 (st : tokenizer_state) (depth : int) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy88 [@tailcall]) st depth
+      (yy108 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy90 [@tailcall]) st depth
-        else (yy89 [@tailcall]) st depth
+        if (st.refill st) then (yy110 [@tailcall]) st depth
+        else (yy109 [@tailcall]) st depth
       ) else (
-        (yy89 [@tailcall]) st depth
+        (yy109 [@tailcall]) st depth
       )
 
-and yy91 (st : tokenizer_state) (depth : int) : unit =
+and yy111 (st : tokenizer_state) (depth : int) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '/' ->
       st.yycursor <- st.yycursor + 1;
-      (yy104 [@tailcall]) st depth
+      (yy124 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy91 [@tailcall]) st depth
-        else (yy87 [@tailcall]) st depth
+        if (st.refill st) then (yy111 [@tailcall]) st depth
+        else (yy107 [@tailcall]) st depth
       ) else (
-        (yy87 [@tailcall]) st depth
+        (yy107 [@tailcall]) st depth
       )
 
-and yy92 (st : tokenizer_state) (depth : int) : unit =
+and yy112 (st : tokenizer_state) (depth : int) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '*' ->
       st.yycursor <- st.yycursor + 1;
-      (yy105 [@tailcall]) st depth
+      (yy125 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy92 [@tailcall]) st depth
-        else (yy87 [@tailcall]) st depth
+        if (st.refill st) then (yy112 [@tailcall]) st depth
+        else (yy107 [@tailcall]) st depth
       ) else (
-        (yy87 [@tailcall]) st depth
+        (yy107 [@tailcall]) st depth
       )
 
-and yy93 (st : tokenizer_state) (depth : int) : unit =
-  (yy94 [@tailcall]) st depth
+and yy113 (st : tokenizer_state) (depth : int) : unit =
+  (yy114 [@tailcall]) st depth
 
-and yy94 (st : tokenizer_state) (depth : int) : unit =
+and yy114 (st : tokenizer_state) (depth : int) : unit =
   malformed_utf8 st
 
-and yy95 (st : tokenizer_state) (depth : int) : unit =
+and yy115 (st : tokenizer_state) (depth : int) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy86 [@tailcall]) st depth
+      (yy106 [@tailcall]) st depth
     | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy88 [@tailcall]) st depth
+      (yy108 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy95 [@tailcall]) st depth
-        else (yy94 [@tailcall]) st depth
+        if (st.refill st) then (yy115 [@tailcall]) st depth
+        else (yy114 [@tailcall]) st depth
       ) else (
-        (yy94 [@tailcall]) st depth
+        (yy114 [@tailcall]) st depth
       )
 
-and yy96 (st : tokenizer_state) (depth : int) : unit =
+and yy116 (st : tokenizer_state) (depth : int) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy86 [@tailcall]) st depth
+      (yy106 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy96 [@tailcall]) st depth
-        else (yy94 [@tailcall]) st depth
+        if (st.refill st) then (yy116 [@tailcall]) st depth
+        else (yy114 [@tailcall]) st depth
       ) else (
-        (yy94 [@tailcall]) st depth
+        (yy114 [@tailcall]) st depth
       )
 
-and yy97 (st : tokenizer_state) (depth : int) : unit =
+and yy117 (st : tokenizer_state) (depth : int) : unit =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy106 [@tailcall]) st depth
+      (yy126 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy97 [@tailcall]) st depth
-        else (yy94 [@tailcall]) st depth
+        if (st.refill st) then (yy117 [@tailcall]) st depth
+        else (yy114 [@tailcall]) st depth
       ) else (
-        (yy94 [@tailcall]) st depth
+        (yy114 [@tailcall]) st depth
       )
 
-and yy98 (st : tokenizer_state) (depth : int) : unit =
+and yy118 (st : tokenizer_state) (depth : int) : unit =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy106 [@tailcall]) st depth
+      (yy126 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy98 [@tailcall]) st depth
-        else (yy94 [@tailcall]) st depth
+        if (st.refill st) then (yy118 [@tailcall]) st depth
+        else (yy114 [@tailcall]) st depth
       ) else (
-        (yy94 [@tailcall]) st depth
+        (yy114 [@tailcall]) st depth
       )
 
-and yy99 (st : tokenizer_state) (depth : int) : unit =
+and yy119 (st : tokenizer_state) (depth : int) : unit =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy108 [@tailcall]) st depth
+      (yy128 [@tailcall]) st depth
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy106 [@tailcall]) st depth
+      (yy126 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy99 [@tailcall]) st depth
-        else (yy94 [@tailcall]) st depth
+        if (st.refill st) then (yy119 [@tailcall]) st depth
+        else (yy114 [@tailcall]) st depth
       ) else (
-        (yy94 [@tailcall]) st depth
+        (yy114 [@tailcall]) st depth
       )
 
-and yy100 (st : tokenizer_state) (depth : int) : unit =
+and yy120 (st : tokenizer_state) (depth : int) : unit =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy106 [@tailcall]) st depth
+      (yy126 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy100 [@tailcall]) st depth
-        else (yy94 [@tailcall]) st depth
+        if (st.refill st) then (yy120 [@tailcall]) st depth
+        else (yy114 [@tailcall]) st depth
       ) else (
-        (yy94 [@tailcall]) st depth
+        (yy114 [@tailcall]) st depth
       )
 
-and yy101 (st : tokenizer_state) (depth : int) : unit =
+and yy121 (st : tokenizer_state) (depth : int) : unit =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy109 [@tailcall]) st depth
+      (yy129 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy101 [@tailcall]) st depth
-        else (yy94 [@tailcall]) st depth
+        if (st.refill st) then (yy121 [@tailcall]) st depth
+        else (yy114 [@tailcall]) st depth
       ) else (
-        (yy94 [@tailcall]) st depth
+        (yy114 [@tailcall]) st depth
       )
 
-and yy102 (st : tokenizer_state) (depth : int) : unit =
+and yy122 (st : tokenizer_state) (depth : int) : unit =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy109 [@tailcall]) st depth
+      (yy129 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy102 [@tailcall]) st depth
-        else (yy94 [@tailcall]) st depth
+        if (st.refill st) then (yy122 [@tailcall]) st depth
+        else (yy114 [@tailcall]) st depth
       ) else (
-        (yy94 [@tailcall]) st depth
+        (yy114 [@tailcall]) st depth
       )
 
-and yy103 (st : tokenizer_state) (depth : int) : unit =
+and yy123 (st : tokenizer_state) (depth : int) : unit =
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy109 [@tailcall]) st depth
+      (yy129 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy103 [@tailcall]) st depth
-        else (yy94 [@tailcall]) st depth
+        if (st.refill st) then (yy123 [@tailcall]) st depth
+        else (yy114 [@tailcall]) st depth
       ) else (
-        (yy94 [@tailcall]) st depth
+        (yy114 [@tailcall]) st depth
       )
 
-and yy104 (st : tokenizer_state) (depth : int) : unit =
+and yy124 (st : tokenizer_state) (depth : int) : unit =
   if depth <= 0 then () else multiline_comment st (depth - 1)
 
-and yy105 (st : tokenizer_state) (depth : int) : unit =
+and yy125 (st : tokenizer_state) (depth : int) : unit =
   multiline_comment st (depth + 1)
 
-and yy106 (st : tokenizer_state) (depth : int) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy86 [@tailcall]) st depth
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy106 [@tailcall]) st depth
-        else (yy107 [@tailcall]) st depth
-      ) else (
-        (yy107 [@tailcall]) st depth
-      )
-
-and yy107 (st : tokenizer_state) (depth : int) : unit =
-  st.yycursor <- st.yymarker;
-  (yy94 [@tailcall]) st depth
-
-and yy108 (st : tokenizer_state) (depth : int) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xA7'
-    | '\xAA'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy86 [@tailcall]) st depth
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy88 [@tailcall]) st depth
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy108 [@tailcall]) st depth
-        else (yy107 [@tailcall]) st depth
-      ) else (
-        (yy107 [@tailcall]) st depth
-      )
-
-and yy109 (st : tokenizer_state) (depth : int) : unit =
+and yy126 (st : tokenizer_state) (depth : int) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
@@ -1870,78 +2214,114 @@ and yy109 (st : tokenizer_state) (depth : int) : unit =
       (yy106 [@tailcall]) st depth
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy109 [@tailcall]) st depth
-        else (yy107 [@tailcall]) st depth
+        if (st.refill st) then (yy126 [@tailcall]) st depth
+        else (yy127 [@tailcall]) st depth
       ) else (
-        (yy107 [@tailcall]) st depth
+        (yy127 [@tailcall]) st depth
       )
 
-and yy110 (st : tokenizer_state) (depth : int) : unit =
+and yy127 (st : tokenizer_state) (depth : int) : unit =
+  st.yycursor <- st.yymarker;
+  (yy114 [@tailcall]) st depth
+
+and yy128 (st : tokenizer_state) (depth : int) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xA7'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy106 [@tailcall]) st depth
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy108 [@tailcall]) st depth
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy128 [@tailcall]) st depth
+        else (yy127 [@tailcall]) st depth
+      ) else (
+        (yy127 [@tailcall]) st depth
+      )
+
+and yy129 (st : tokenizer_state) (depth : int) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy126 [@tailcall]) st depth
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy129 [@tailcall]) st depth
+        else (yy127 [@tailcall]) st depth
+      ) else (
+        (yy127 [@tailcall]) st depth
+      )
+
+and yy130 (st : tokenizer_state) (depth : int) : unit =
   error st "Unterminated comment"
 
 and multiline_comment (st : tokenizer_state) (depth : int) : unit =
-  (yy84 [@tailcall]) st depth
+  (yy104 [@tailcall]) st depth
 
 
 
 
-let rec yy111 (st : tokenizer_state) : unit =
+let rec yy131 (st : tokenizer_state) : unit =
   save_start_position st;
-  (yy112 [@tailcall]) st
+  (yy132 [@tailcall]) st
 
-and yy112 (st : tokenizer_state) : unit =
+and yy132 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
     | '\x01'..'\t'
     | '\x0E'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy112 [@tailcall]) st
-        else (yy141 [@tailcall]) st
+        if (st.refill st) then (yy132 [@tailcall]) st
+        else (yy161 [@tailcall]) st
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy113 [@tailcall]) st
+        (yy133 [@tailcall]) st
       )
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy115 [@tailcall]) st
+      (yy135 [@tailcall]) st
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy117 [@tailcall]) st
+      (yy137 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy120 [@tailcall]) st
+      (yy140 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy121 [@tailcall]) st
+      (yy141 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy122 [@tailcall]) st
+      (yy142 [@tailcall]) st
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy123 [@tailcall]) st
+      (yy143 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy124 [@tailcall]) st
+      (yy144 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy125 [@tailcall]) st
+      (yy145 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy126 [@tailcall]) st
+      (yy146 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy127 [@tailcall]) st
+      (yy147 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy128 [@tailcall]) st
+      (yy148 [@tailcall]) st
     | _ ->
       st.yycursor <- st.yycursor + 1;
-      (yy118 [@tailcall]) st
+      (yy138 [@tailcall]) st
 
-and yy113 (st : tokenizer_state) : unit =
+and yy133 (st : tokenizer_state) : unit =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -1950,401 +2330,401 @@ and yy113 (st : tokenizer_state) : unit =
     | '\x01'..'\t'
     | '\x0E'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy113 [@tailcall]) st
-        else (yy114 [@tailcall]) st
+        if (st.refill st) then (yy133 [@tailcall]) st
+        else (yy134 [@tailcall]) st
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy113 [@tailcall]) st
+        (yy133 [@tailcall]) st
       )
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy129 [@tailcall]) st
+      (yy149 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy131 [@tailcall]) st
+      (yy151 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy132 [@tailcall]) st
+      (yy152 [@tailcall]) st
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy133 [@tailcall]) st
+      (yy153 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy134 [@tailcall]) st
+      (yy154 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy135 [@tailcall]) st
+      (yy155 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy136 [@tailcall]) st
+      (yy156 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy137 [@tailcall]) st
+      (yy157 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy138 [@tailcall]) st
-    | _ -> (yy114 [@tailcall]) st
-
-and yy114 (st : tokenizer_state) : unit =
-  singleline_comment st
-
-and yy115 (st : tokenizer_state) : unit =
-  (yy116 [@tailcall]) st
-
-and yy116 (st : tokenizer_state) : unit =
-  newline st
-
-and yy117 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\n' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy115 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy117 [@tailcall]) st
-        else (yy116 [@tailcall]) st
-      ) else (
-        (yy116 [@tailcall]) st
-      )
-
-and yy118 (st : tokenizer_state) : unit =
-  (yy119 [@tailcall]) st
-
-and yy119 (st : tokenizer_state) : unit =
-  malformed_utf8 st
-
-and yy120 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy113 [@tailcall]) st
-    | '\x85' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy115 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy120 [@tailcall]) st
-        else (yy119 [@tailcall]) st
-      ) else (
-        (yy119 [@tailcall]) st
-      )
-
-and yy121 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy113 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy121 [@tailcall]) st
-        else (yy119 [@tailcall]) st
-      ) else (
-        (yy119 [@tailcall]) st
-      )
-
-and yy122 (st : tokenizer_state) : unit =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy131 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy122 [@tailcall]) st
-        else (yy119 [@tailcall]) st
-      ) else (
-        (yy119 [@tailcall]) st
-      )
-
-and yy123 (st : tokenizer_state) : unit =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy131 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy123 [@tailcall]) st
-        else (yy119 [@tailcall]) st
-      ) else (
-        (yy119 [@tailcall]) st
-      )
-
-and yy124 (st : tokenizer_state) : unit =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy139 [@tailcall]) st
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy131 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy124 [@tailcall]) st
-        else (yy119 [@tailcall]) st
-      ) else (
-        (yy119 [@tailcall]) st
-      )
-
-and yy125 (st : tokenizer_state) : unit =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy131 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy125 [@tailcall]) st
-        else (yy119 [@tailcall]) st
-      ) else (
-        (yy119 [@tailcall]) st
-      )
-
-and yy126 (st : tokenizer_state) : unit =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy133 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy126 [@tailcall]) st
-        else (yy119 [@tailcall]) st
-      ) else (
-        (yy119 [@tailcall]) st
-      )
-
-and yy127 (st : tokenizer_state) : unit =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy133 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy127 [@tailcall]) st
-        else (yy119 [@tailcall]) st
-      ) else (
-        (yy119 [@tailcall]) st
-      )
-
-and yy128 (st : tokenizer_state) : unit =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy133 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy128 [@tailcall]) st
-        else (yy119 [@tailcall]) st
-      ) else (
-        (yy119 [@tailcall]) st
-      )
-
-and yy129 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy113 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy129 [@tailcall]) st
-        else (yy130 [@tailcall]) st
-      ) else (
-        (yy130 [@tailcall]) st
-      )
-
-and yy130 (st : tokenizer_state) : unit =
-  st.yycursor <- st.yymarker;
-  if (st.yyaccept == 0) then (yy114 [@tailcall]) st
-  else (yy119 [@tailcall]) st
-
-and yy131 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy113 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy131 [@tailcall]) st
-        else (yy130 [@tailcall]) st
-      ) else (
-        (yy130 [@tailcall]) st
-      )
-
-and yy132 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy131 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy132 [@tailcall]) st
-        else (yy130 [@tailcall]) st
-      ) else (
-        (yy130 [@tailcall]) st
-      )
-
-and yy133 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy131 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy133 [@tailcall]) st
-        else (yy130 [@tailcall]) st
-      ) else (
-        (yy130 [@tailcall]) st
-      )
+      (yy158 [@tailcall]) st
+    | _ -> (yy134 [@tailcall]) st
 
 and yy134 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy140 [@tailcall]) st
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy131 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy134 [@tailcall]) st
-        else (yy130 [@tailcall]) st
-      ) else (
-        (yy130 [@tailcall]) st
-      )
+  singleline_comment st
 
 and yy135 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy131 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy135 [@tailcall]) st
-        else (yy130 [@tailcall]) st
-      ) else (
-        (yy130 [@tailcall]) st
-      )
+  (yy136 [@tailcall]) st
 
 and yy136 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy133 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy136 [@tailcall]) st
-        else (yy130 [@tailcall]) st
-      ) else (
-        (yy130 [@tailcall]) st
-      )
+  newline st
 
 and yy137 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy135 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy137 [@tailcall]) st
+        else (yy136 [@tailcall]) st
+      ) else (
+        (yy136 [@tailcall]) st
+      )
+
+and yy138 (st : tokenizer_state) : unit =
+  (yy139 [@tailcall]) st
+
+and yy139 (st : tokenizer_state) : unit =
+  malformed_utf8 st
+
+and yy140 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy133 [@tailcall]) st
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy135 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy140 [@tailcall]) st
+        else (yy139 [@tailcall]) st
+      ) else (
+        (yy139 [@tailcall]) st
+      )
+
+and yy141 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
       (yy133 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy137 [@tailcall]) st
-        else (yy130 [@tailcall]) st
+        if (st.refill st) then (yy141 [@tailcall]) st
+        else (yy139 [@tailcall]) st
       ) else (
-        (yy130 [@tailcall]) st
+        (yy139 [@tailcall]) st
       )
 
-and yy138 (st : tokenizer_state) : unit =
+and yy142 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy151 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy142 [@tailcall]) st
+        else (yy139 [@tailcall]) st
+      ) else (
+        (yy139 [@tailcall]) st
+      )
+
+and yy143 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy151 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy143 [@tailcall]) st
+        else (yy139 [@tailcall]) st
+      ) else (
+        (yy139 [@tailcall]) st
+      )
+
+and yy144 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy159 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy151 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy144 [@tailcall]) st
+        else (yy139 [@tailcall]) st
+      ) else (
+        (yy139 [@tailcall]) st
+      )
+
+and yy145 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy151 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy145 [@tailcall]) st
+        else (yy139 [@tailcall]) st
+      ) else (
+        (yy139 [@tailcall]) st
+      )
+
+and yy146 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy153 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy146 [@tailcall]) st
+        else (yy139 [@tailcall]) st
+      ) else (
+        (yy139 [@tailcall]) st
+      )
+
+and yy147 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy153 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy147 [@tailcall]) st
+        else (yy139 [@tailcall]) st
+      ) else (
+        (yy139 [@tailcall]) st
+      )
+
+and yy148 (st : tokenizer_state) : unit =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
+      (yy153 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy148 [@tailcall]) st
+        else (yy139 [@tailcall]) st
+      ) else (
+        (yy139 [@tailcall]) st
+      )
+
+and yy149 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
       (yy133 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy138 [@tailcall]) st
-        else (yy130 [@tailcall]) st
+        if (st.refill st) then (yy149 [@tailcall]) st
+        else (yy150 [@tailcall]) st
       ) else (
-        (yy130 [@tailcall]) st
+        (yy150 [@tailcall]) st
       )
 
-and yy139 (st : tokenizer_state) : unit =
+and yy150 (st : tokenizer_state) : unit =
+  st.yycursor <- st.yymarker;
+  if (st.yyaccept == 0) then (yy134 [@tailcall]) st
+  else (yy139 [@tailcall]) st
+
+and yy151 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy133 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy151 [@tailcall]) st
+        else (yy150 [@tailcall]) st
+      ) else (
+        (yy150 [@tailcall]) st
+      )
+
+and yy152 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy151 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy152 [@tailcall]) st
+        else (yy150 [@tailcall]) st
+      ) else (
+        (yy150 [@tailcall]) st
+      )
+
+and yy153 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy151 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy153 [@tailcall]) st
+        else (yy150 [@tailcall]) st
+      ) else (
+        (yy150 [@tailcall]) st
+      )
+
+and yy154 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy160 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy151 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy154 [@tailcall]) st
+        else (yy150 [@tailcall]) st
+      ) else (
+        (yy150 [@tailcall]) st
+      )
+
+and yy155 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy151 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy155 [@tailcall]) st
+        else (yy150 [@tailcall]) st
+      ) else (
+        (yy150 [@tailcall]) st
+      )
+
+and yy156 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy153 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy156 [@tailcall]) st
+        else (yy150 [@tailcall]) st
+      ) else (
+        (yy150 [@tailcall]) st
+      )
+
+and yy157 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy153 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy157 [@tailcall]) st
+        else (yy150 [@tailcall]) st
+      ) else (
+        (yy150 [@tailcall]) st
+      )
+
+and yy158 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy153 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy158 [@tailcall]) st
+        else (yy150 [@tailcall]) st
+      ) else (
+        (yy150 [@tailcall]) st
+      )
+
+and yy159 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA7'
     | '\xAA'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy113 [@tailcall]) st
+      (yy133 [@tailcall]) st
     | '\xA8'..'\xA9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy115 [@tailcall]) st
+      (yy135 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy139 [@tailcall]) st
-        else (yy130 [@tailcall]) st
+        if (st.refill st) then (yy159 [@tailcall]) st
+        else (yy150 [@tailcall]) st
       ) else (
-        (yy130 [@tailcall]) st
+        (yy150 [@tailcall]) st
       )
 
-and yy140 (st : tokenizer_state) : unit =
+and yy160 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA7'
     | '\xAA'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy113 [@tailcall]) st
+      (yy133 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy140 [@tailcall]) st
-        else (yy130 [@tailcall]) st
+        if (st.refill st) then (yy160 [@tailcall]) st
+        else (yy150 [@tailcall]) st
       ) else (
-        (yy130 [@tailcall]) st
+        (yy150 [@tailcall]) st
       )
 
-and yy141 (st : tokenizer_state) : unit =
+and yy161 (st : tokenizer_state) : unit =
   ()
 
 and singleline_comment (st : tokenizer_state) : unit =
-  (yy111 [@tailcall]) st
+  (yy131 [@tailcall]) st
 
 
 
 
-let rec yy142 (st : tokenizer_state) : unit =
+let rec yy162 (st : tokenizer_state) : unit =
   save_start_position st;
-  (yy143 [@tailcall]) st
+  (yy163 [@tailcall]) st
 
-and yy143 (st : tokenizer_state) : unit =
+and yy163 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -2353,73 +2733,73 @@ and yy143 (st : tokenizer_state) : unit =
     | '!'..'.'
     | '0'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy143 [@tailcall]) st
-        else (yy180 [@tailcall]) st
+        if (st.refill st) then (yy163 [@tailcall]) st
+        else (yy200 [@tailcall]) st
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy144 [@tailcall]) st
+        (yy164 [@tailcall]) st
       )
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy148 [@tailcall]) st
+      (yy168 [@tailcall]) st
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy150 [@tailcall]) st
+      (yy170 [@tailcall]) st
     | '/' ->
       st.yycursor <- st.yycursor + 1;
-      (yy151 [@tailcall]) st
+      (yy171 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy154 [@tailcall]) st
+      (yy174 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy155 [@tailcall]) st
+      (yy175 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy156 [@tailcall]) st
+      (yy176 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy157 [@tailcall]) st
+      (yy177 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy158 [@tailcall]) st
+      (yy178 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy159 [@tailcall]) st
+      (yy179 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy160 [@tailcall]) st
+      (yy180 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy161 [@tailcall]) st
+      (yy181 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy162 [@tailcall]) st
+      (yy182 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy163 [@tailcall]) st
+      (yy183 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy164 [@tailcall]) st
+      (yy184 [@tailcall]) st
     | _ ->
       st.yycursor <- st.yycursor + 1;
-      (yy152 [@tailcall]) st
+      (yy172 [@tailcall]) st
 
-and yy144 (st : tokenizer_state) : unit =
-  (yy145 [@tailcall]) st
+and yy164 (st : tokenizer_state) : unit =
+  (yy165 [@tailcall]) st
 
-and yy145 (st : tokenizer_state) : unit =
+and yy165 (st : tokenizer_state) : unit =
   
     error st @@
       sprintf "Illegal character '%s' after the '\\' line continuation" (lexeme st)
 
 
-and yy146 (st : tokenizer_state) : unit =
+and yy166 (st : tokenizer_state) : unit =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -2427,126 +2807,126 @@ and yy146 (st : tokenizer_state) : unit =
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy165 [@tailcall]) st
+      (yy185 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy167 [@tailcall]) st
+      (yy187 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy168 [@tailcall]) st
+      (yy188 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy169 [@tailcall]) st
+      (yy189 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy146 [@tailcall]) st
-        else (yy147 [@tailcall]) st
+        if (st.refill st) then (yy166 [@tailcall]) st
+        else (yy167 [@tailcall]) st
       ) else (
-        (yy147 [@tailcall]) st
+        (yy167 [@tailcall]) st
       )
 
-and yy147 (st : tokenizer_state) : unit =
+and yy167 (st : tokenizer_state) : unit =
   line_cont st
 
-and yy148 (st : tokenizer_state) : unit =
-  (yy149 [@tailcall]) st
+and yy168 (st : tokenizer_state) : unit =
+  (yy169 [@tailcall]) st
 
-and yy149 (st : tokenizer_state) : unit =
+and yy169 (st : tokenizer_state) : unit =
   newline st
 
-and yy150 (st : tokenizer_state) : unit =
+and yy170 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy148 [@tailcall]) st
+      (yy168 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy150 [@tailcall]) st
-        else (yy149 [@tailcall]) st
+        if (st.refill st) then (yy170 [@tailcall]) st
+        else (yy169 [@tailcall]) st
       ) else (
-        (yy149 [@tailcall]) st
+        (yy169 [@tailcall]) st
       )
 
-and yy151 (st : tokenizer_state) : unit =
+and yy171 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '*' ->
       st.yycursor <- st.yycursor + 1;
-      (yy170 [@tailcall]) st
+      (yy190 [@tailcall]) st
     | '/' ->
       st.yycursor <- st.yycursor + 1;
-      (yy171 [@tailcall]) st
+      (yy191 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy151 [@tailcall]) st
-        else (yy145 [@tailcall]) st
+        if (st.refill st) then (yy171 [@tailcall]) st
+        else (yy165 [@tailcall]) st
       ) else (
-        (yy145 [@tailcall]) st
+        (yy165 [@tailcall]) st
       )
 
-and yy152 (st : tokenizer_state) : unit =
-  (yy153 [@tailcall]) st
+and yy172 (st : tokenizer_state) : unit =
+  (yy173 [@tailcall]) st
 
-and yy153 (st : tokenizer_state) : unit =
+and yy173 (st : tokenizer_state) : unit =
   malformed_utf8 st
 
-and yy154 (st : tokenizer_state) : unit =
+and yy174 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy144 [@tailcall]) st
+      (yy164 [@tailcall]) st
     | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy148 [@tailcall]) st
+      (yy168 [@tailcall]) st
     | '\xA0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy154 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy174 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy155 (st : tokenizer_state) : unit =
+and yy175 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy144 [@tailcall]) st
+      (yy164 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy155 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy175 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy156 (st : tokenizer_state) : unit =
+and yy176 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy172 [@tailcall]) st
+      (yy192 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy156 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy176 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy157 (st : tokenizer_state) : unit =
+and yy177 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -2554,352 +2934,352 @@ and yy157 (st : tokenizer_state) : unit =
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy172 [@tailcall]) st
+      (yy192 [@tailcall]) st
     | '\x9A' ->
       st.yycursor <- st.yycursor + 1;
-      (yy173 [@tailcall]) st
+      (yy193 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy157 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy177 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy158 (st : tokenizer_state) : unit =
+and yy178 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy174 [@tailcall]) st
+      (yy194 [@tailcall]) st
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy175 [@tailcall]) st
+      (yy195 [@tailcall]) st
     | '\x82'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy172 [@tailcall]) st
+      (yy192 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy158 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy178 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy159 (st : tokenizer_state) : unit =
+and yy179 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy173 [@tailcall]) st
+      (yy193 [@tailcall]) st
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy172 [@tailcall]) st
+      (yy192 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy159 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy179 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy160 (st : tokenizer_state) : unit =
+and yy180 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy172 [@tailcall]) st
+      (yy192 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy160 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy180 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy161 (st : tokenizer_state) : unit =
+and yy181 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy172 [@tailcall]) st
+      (yy192 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy161 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy181 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy162 (st : tokenizer_state) : unit =
+and yy182 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy176 [@tailcall]) st
+      (yy196 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy162 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy182 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy163 (st : tokenizer_state) : unit =
+and yy183 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy176 [@tailcall]) st
+      (yy196 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy163 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy183 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy164 (st : tokenizer_state) : unit =
+and yy184 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy176 [@tailcall]) st
+      (yy196 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy164 [@tailcall]) st
-        else (yy153 [@tailcall]) st
+        if (st.refill st) then (yy184 [@tailcall]) st
+        else (yy173 [@tailcall]) st
       ) else (
-        (yy153 [@tailcall]) st
+        (yy173 [@tailcall]) st
       )
 
-and yy165 (st : tokenizer_state) : unit =
+and yy185 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy165 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy185 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy166 (st : tokenizer_state) : unit =
+and yy186 (st : tokenizer_state) : unit =
   st.yycursor <- st.yymarker;
-  if (st.yyaccept == 0) then (yy147 [@tailcall]) st
-  else (yy153 [@tailcall]) st
+  if (st.yyaccept == 0) then (yy167 [@tailcall]) st
+  else (yy173 [@tailcall]) st
 
-and yy167 (st : tokenizer_state) : unit =
+and yy187 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x9A' ->
       st.yycursor <- st.yycursor + 1;
-      (yy177 [@tailcall]) st
+      (yy197 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy167 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy187 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy168 (st : tokenizer_state) : unit =
+and yy188 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy178 [@tailcall]) st
+      (yy198 [@tailcall]) st
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy179 [@tailcall]) st
+      (yy199 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy168 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy188 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy169 (st : tokenizer_state) : unit =
+and yy189 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy177 [@tailcall]) st
+      (yy197 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy169 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy189 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy170 (st : tokenizer_state) : unit =
+and yy190 (st : tokenizer_state) : unit =
   multiline_comment st 0; line_cont st
 
-and yy171 (st : tokenizer_state) : unit =
+and yy191 (st : tokenizer_state) : unit =
   singleline_comment st
 
-and yy172 (st : tokenizer_state) : unit =
+and yy192 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy144 [@tailcall]) st
+      (yy164 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy172 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy192 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy173 (st : tokenizer_state) : unit =
+and yy193 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy144 [@tailcall]) st
+      (yy164 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy173 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy193 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy174 (st : tokenizer_state) : unit =
+and yy194 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | '\x8B'..'\xA7'
     | '\xAA'..'\xAE'
     | '\xB0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy144 [@tailcall]) st
+      (yy164 [@tailcall]) st
     | '\xA8'..'\xA9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy148 [@tailcall]) st
+      (yy168 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy174 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy194 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy175 (st : tokenizer_state) : unit =
+and yy195 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy144 [@tailcall]) st
+      (yy164 [@tailcall]) st
     | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy175 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy195 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy176 (st : tokenizer_state) : unit =
+and yy196 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy172 [@tailcall]) st
+      (yy192 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy176 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy196 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy177 (st : tokenizer_state) : unit =
+and yy197 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy177 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy197 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy178 (st : tokenizer_state) : unit =
+and yy198 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy178 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy198 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy179 (st : tokenizer_state) : unit =
+and yy199 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy146 [@tailcall]) st
+      (yy166 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy179 [@tailcall]) st
-        else (yy166 [@tailcall]) st
+        if (st.refill st) then (yy199 [@tailcall]) st
+        else (yy186 [@tailcall]) st
       ) else (
-        (yy166 [@tailcall]) st
+        (yy186 [@tailcall]) st
       )
 
-and yy180 (st : tokenizer_state) : unit =
+and yy200 (st : tokenizer_state) : unit =
   ()
 
 and line_cont (st : tokenizer_state) : unit =
-  (yy142 [@tailcall]) st
+  (yy162 [@tailcall]) st
 
 
 
 
-let rec yy181 (st : tokenizer_state) : unit =
+let rec yy201 (st : tokenizer_state) : unit =
   save_start_position st;
-  (yy182 [@tailcall]) st
+  (yy202 [@tailcall]) st
 
-and yy182 (st : tokenizer_state) : unit =
+and yy202 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -2907,77 +3287,77 @@ and yy182 (st : tokenizer_state) : unit =
     | '\x0E'..'\x1F'
     | '!'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy182 [@tailcall]) st
-        else (yy215 [@tailcall]) st
+        if (st.refill st) then (yy202 [@tailcall]) st
+        else (yy235 [@tailcall]) st
       ) else (
         st.yyt1 <- st.yycursor;
         st.yycursor <- st.yycursor + 1;
-        (yy183 [@tailcall]) st
+        (yy203 [@tailcall]) st
       )
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
+      (yy204 [@tailcall]) st
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy186 [@tailcall]) st
+      (yy206 [@tailcall]) st
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy188 [@tailcall]) st
+      (yy208 [@tailcall]) st
     | '\xC2' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy191 [@tailcall]) st
+      (yy211 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy192 [@tailcall]) st
+      (yy212 [@tailcall]) st
     | '\xE0' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy193 [@tailcall]) st
+      (yy213 [@tailcall]) st
     | '\xE1' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy194 [@tailcall]) st
+      (yy214 [@tailcall]) st
     | '\xE2' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy195 [@tailcall]) st
+      (yy215 [@tailcall]) st
     | '\xE3' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy196 [@tailcall]) st
+      (yy216 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy197 [@tailcall]) st
+      (yy217 [@tailcall]) st
     | '\xED' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy198 [@tailcall]) st
+      (yy218 [@tailcall]) st
     | '\xF0' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy199 [@tailcall]) st
+      (yy219 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy200 [@tailcall]) st
+      (yy220 [@tailcall]) st
     | '\xF4' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy201 [@tailcall]) st
+      (yy221 [@tailcall]) st
     | _ ->
       st.yycursor <- st.yycursor + 1;
-      (yy189 [@tailcall]) st
+      (yy209 [@tailcall]) st
 
-and yy183 (st : tokenizer_state) : unit =
+and yy203 (st : tokenizer_state) : unit =
   st.yycursor <- st.yyt1;
   ()
 
-and yy184 (st : tokenizer_state) : unit =
+and yy204 (st : tokenizer_state) : unit =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -2985,109 +3365,109 @@ and yy184 (st : tokenizer_state) : unit =
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
+      (yy204 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy202 [@tailcall]) st
+      (yy222 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy204 [@tailcall]) st
+      (yy224 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy205 [@tailcall]) st
+      (yy225 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy206 [@tailcall]) st
+      (yy226 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy184 [@tailcall]) st
-        else (yy185 [@tailcall]) st
+        if (st.refill st) then (yy204 [@tailcall]) st
+        else (yy205 [@tailcall]) st
       ) else (
-        (yy185 [@tailcall]) st
+        (yy205 [@tailcall]) st
       )
 
-and yy185 (st : tokenizer_state) : unit =
+and yy205 (st : tokenizer_state) : unit =
   whitespace_escape st
 
-and yy186 (st : tokenizer_state) : unit =
-  (yy187 [@tailcall]) st
+and yy206 (st : tokenizer_state) : unit =
+  (yy207 [@tailcall]) st
 
-and yy187 (st : tokenizer_state) : unit =
+and yy207 (st : tokenizer_state) : unit =
   newline st; whitespace_escape st
 
-and yy188 (st : tokenizer_state) : unit =
+and yy208 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy186 [@tailcall]) st
+      (yy206 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy188 [@tailcall]) st
-        else (yy187 [@tailcall]) st
+        if (st.refill st) then (yy208 [@tailcall]) st
+        else (yy207 [@tailcall]) st
       ) else (
-        (yy187 [@tailcall]) st
+        (yy207 [@tailcall]) st
       )
 
-and yy189 (st : tokenizer_state) : unit =
-  (yy190 [@tailcall]) st
+and yy209 (st : tokenizer_state) : unit =
+  (yy210 [@tailcall]) st
 
-and yy190 (st : tokenizer_state) : unit =
+and yy210 (st : tokenizer_state) : unit =
   malformed_utf8 st
 
-and yy191 (st : tokenizer_state) : unit =
+and yy211 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy183 [@tailcall]) st
+      (yy203 [@tailcall]) st
     | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy186 [@tailcall]) st
+      (yy206 [@tailcall]) st
     | '\xA0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
+      (yy204 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy191 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy211 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy192 (st : tokenizer_state) : unit =
+and yy212 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy183 [@tailcall]) st
+      (yy203 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy192 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy212 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy193 (st : tokenizer_state) : unit =
+and yy213 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy207 [@tailcall]) st
+      (yy227 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy193 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy213 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy194 (st : tokenizer_state) : unit =
+and yy214 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -3095,441 +3475,164 @@ and yy194 (st : tokenizer_state) : unit =
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy207 [@tailcall]) st
+      (yy227 [@tailcall]) st
     | '\x9A' ->
       st.yycursor <- st.yycursor + 1;
-      (yy208 [@tailcall]) st
+      (yy228 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy194 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy214 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy195 (st : tokenizer_state) : unit =
+and yy215 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy209 [@tailcall]) st
+      (yy229 [@tailcall]) st
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy210 [@tailcall]) st
+      (yy230 [@tailcall]) st
     | '\x82'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy207 [@tailcall]) st
+      (yy227 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy195 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy215 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy196 (st : tokenizer_state) : unit =
+and yy216 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy208 [@tailcall]) st
+      (yy228 [@tailcall]) st
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy207 [@tailcall]) st
+      (yy227 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy196 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy216 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy197 (st : tokenizer_state) : unit =
+and yy217 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy207 [@tailcall]) st
+      (yy227 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy197 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy217 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy198 (st : tokenizer_state) : unit =
+and yy218 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy207 [@tailcall]) st
+      (yy227 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy198 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy218 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy199 (st : tokenizer_state) : unit =
+and yy219 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy211 [@tailcall]) st
+      (yy231 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy199 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy219 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy200 (st : tokenizer_state) : unit =
+and yy220 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy211 [@tailcall]) st
+      (yy231 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy200 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy220 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy201 (st : tokenizer_state) : unit =
+and yy221 (st : tokenizer_state) : unit =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy211 [@tailcall]) st
+      (yy231 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy201 [@tailcall]) st
-        else (yy190 [@tailcall]) st
+        if (st.refill st) then (yy221 [@tailcall]) st
+        else (yy210 [@tailcall]) st
       ) else (
-        (yy190 [@tailcall]) st
+        (yy210 [@tailcall]) st
       )
 
-and yy202 (st : tokenizer_state) : unit =
+and yy222 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
+      (yy204 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy202 [@tailcall]) st
-        else (yy203 [@tailcall]) st
+        if (st.refill st) then (yy222 [@tailcall]) st
+        else (yy223 [@tailcall]) st
       ) else (
-        (yy203 [@tailcall]) st
+        (yy223 [@tailcall]) st
       )
-
-and yy203 (st : tokenizer_state) : unit =
-  st.yycursor <- st.yymarker;
-  if (st.yyaccept == 0) then (yy185 [@tailcall]) st
-  else (yy190 [@tailcall]) st
-
-and yy204 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy212 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy204 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy205 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy213 [@tailcall]) st
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy214 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy205 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy206 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy212 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy206 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy207 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy183 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy207 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy208 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy183 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy208 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy209 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
-    | '\x8B'..'\xA7'
-    | '\xAA'..'\xAE'
-    | '\xB0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy183 [@tailcall]) st
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy186 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy209 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy210 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9E'
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy183 [@tailcall]) st
-    | '\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy210 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy211 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy207 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy211 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy212 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy212 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy213 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy213 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy214 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy184 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy214 [@tailcall]) st
-        else (yy203 [@tailcall]) st
-      ) else (
-        (yy203 [@tailcall]) st
-      )
-
-and yy215 (st : tokenizer_state) : unit =
-  ()
-
-and whitespace_escape (st : tokenizer_state) : unit =
-  (yy181 [@tailcall]) st
-
-
-
-
-let rec yy216 (st : tokenizer_state) : unit =
-  save_start_position st;
-  (yy217 [@tailcall]) st
-
-and yy217 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00'
-    | '\x01'..'\t'
-    | '\x0E'..'\x7F' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy217 [@tailcall]) st
-        else (yy237 [@tailcall]) st
-      ) else (
-        st.yycursor <- st.yycursor + 1;
-        (yy218 [@tailcall]) st
-      )
-    | '\n'..'\x0C' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy219 [@tailcall]) st
-    | '\r' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy221 [@tailcall]) st
-    | '\xC2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy224 [@tailcall]) st
-    | '\xC3'..'\xDF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy225 [@tailcall]) st
-    | '\xE0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy226 [@tailcall]) st
-    | '\xE1'
-    | '\xE3'..'\xEC'
-    | '\xEE'..'\xEF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy227 [@tailcall]) st
-    | '\xE2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy228 [@tailcall]) st
-    | '\xED' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy229 [@tailcall]) st
-    | '\xF0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy230 [@tailcall]) st
-    | '\xF1'..'\xF3' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy231 [@tailcall]) st
-    | '\xF4' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy232 [@tailcall]) st
-    | _ ->
-      st.yycursor <- st.yycursor + 1;
-      (yy222 [@tailcall]) st
-
-and yy218 (st : tokenizer_state) : unit =
-  error st "A multiline string must start with newline"
-
-and yy219 (st : tokenizer_state) : unit =
-  (yy220 [@tailcall]) st
-
-and yy220 (st : tokenizer_state) : unit =
-  st.yycursor <- st.yyt1;
-  ()
-
-and yy221 (st : tokenizer_state) : unit =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\n' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy219 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy221 [@tailcall]) st
-        else (yy220 [@tailcall]) st
-      ) else (
-        (yy220 [@tailcall]) st
-      )
-
-and yy222 (st : tokenizer_state) : unit =
-  (yy223 [@tailcall]) st
 
 and yy223 (st : tokenizer_state) : unit =
-  malformed_utf8 st
+  st.yycursor <- st.yymarker;
+  if (st.yyaccept == 0) then (yy205 [@tailcall]) st
+  else (yy210 [@tailcall]) st
 
 and yy224 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\xBF' ->
+    | '\x9A' ->
       st.yycursor <- st.yycursor + 1;
-      (yy218 [@tailcall]) st
-    | '\x85' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy219 [@tailcall]) st
+      (yy232 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy224 [@tailcall]) st
@@ -3541,9 +3644,12 @@ and yy224 (st : tokenizer_state) : unit =
 and yy225 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBF' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy218 [@tailcall]) st
+      (yy233 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy234 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy225 [@tailcall]) st
@@ -3553,12 +3659,11 @@ and yy225 (st : tokenizer_state) : unit =
       )
 
 and yy226 (st : tokenizer_state) : unit =
-  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\xA0'..'\xBF' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy233 [@tailcall]) st
+      (yy232 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy226 [@tailcall]) st
@@ -3568,12 +3673,11 @@ and yy226 (st : tokenizer_state) : unit =
       )
 
 and yy227 (st : tokenizer_state) : unit =
-  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy233 [@tailcall]) st
+      (yy203 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy227 [@tailcall]) st
@@ -3583,15 +3687,14 @@ and yy227 (st : tokenizer_state) : unit =
       )
 
 and yy228 (st : tokenizer_state) : unit =
-  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy235 [@tailcall]) st
+      (yy204 [@tailcall]) st
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy233 [@tailcall]) st
+      (yy203 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy228 [@tailcall]) st
@@ -3601,12 +3704,20 @@ and yy228 (st : tokenizer_state) : unit =
       )
 
 and yy229 (st : tokenizer_state) : unit =
-  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x9F' ->
+    | '\x80'..'\x8A'
+    | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy233 [@tailcall]) st
+      (yy204 [@tailcall]) st
+    | '\x8B'..'\xA7'
+    | '\xAA'..'\xAE'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy203 [@tailcall]) st
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy206 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy229 [@tailcall]) st
@@ -3616,12 +3727,15 @@ and yy229 (st : tokenizer_state) : unit =
       )
 
 and yy230 (st : tokenizer_state) : unit =
-  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x90'..'\xBF' ->
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy236 [@tailcall]) st
+      (yy203 [@tailcall]) st
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy204 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy230 [@tailcall]) st
@@ -3631,12 +3745,11 @@ and yy230 (st : tokenizer_state) : unit =
       )
 
 and yy231 (st : tokenizer_state) : unit =
-  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy236 [@tailcall]) st
+      (yy227 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy231 [@tailcall]) st
@@ -3646,12 +3759,11 @@ and yy231 (st : tokenizer_state) : unit =
       )
 
 and yy232 (st : tokenizer_state) : unit =
-  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x8F' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy236 [@tailcall]) st
+      (yy204 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy232 [@tailcall]) st
@@ -3663,649 +3775,644 @@ and yy232 (st : tokenizer_state) : unit =
 and yy233 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBF' ->
+    | '\x80'..'\x8A'
+    | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy218 [@tailcall]) st
+      (yy204 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy233 [@tailcall]) st
-        else (yy234 [@tailcall]) st
+        else (yy223 [@tailcall]) st
       ) else (
-        (yy234 [@tailcall]) st
+        (yy223 [@tailcall]) st
       )
 
 and yy234 (st : tokenizer_state) : unit =
-  st.yycursor <- st.yymarker;
-  (yy223 [@tailcall]) st
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy204 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy234 [@tailcall]) st
+        else (yy223 [@tailcall]) st
+      ) else (
+        (yy223 [@tailcall]) st
+      )
 
 and yy235 (st : tokenizer_state) : unit =
+  ()
+
+and whitespace_escape (st : tokenizer_state) : unit =
+  (yy201 [@tailcall]) st
+
+
+
+
+let rec yy236 (st : tokenizer_state) : unit =
+  save_start_position st;
+  (yy237 [@tailcall]) st
+
+and yy237 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\t'
+    | '\x0E'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy237 [@tailcall]) st
+        else (yy257 [@tailcall]) st
+      ) else (
+        st.yycursor <- st.yycursor + 1;
+        (yy238 [@tailcall]) st
+      )
+    | '\n'..'\x0C' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy239 [@tailcall]) st
+    | '\r' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy241 [@tailcall]) st
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy244 [@tailcall]) st
+    | '\xC3'..'\xDF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy245 [@tailcall]) st
+    | '\xE0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy246 [@tailcall]) st
+    | '\xE1'
+    | '\xE3'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy247 [@tailcall]) st
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy248 [@tailcall]) st
+    | '\xED' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy249 [@tailcall]) st
+    | '\xF0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy250 [@tailcall]) st
+    | '\xF1'..'\xF3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy251 [@tailcall]) st
+    | '\xF4' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy252 [@tailcall]) st
+    | _ ->
+      st.yycursor <- st.yycursor + 1;
+      (yy242 [@tailcall]) st
+
+and yy238 (st : tokenizer_state) : unit =
+  error st "A multiline string must start with newline"
+
+and yy239 (st : tokenizer_state) : unit =
+  (yy240 [@tailcall]) st
+
+and yy240 (st : tokenizer_state) : unit =
+  st.yycursor <- st.yyt1;
+  ()
+
+and yy241 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy239 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy241 [@tailcall]) st
+        else (yy240 [@tailcall]) st
+      ) else (
+        (yy240 [@tailcall]) st
+      )
+
+and yy242 (st : tokenizer_state) : unit =
+  (yy243 [@tailcall]) st
+
+and yy243 (st : tokenizer_state) : unit =
+  malformed_utf8 st
+
+and yy244 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy238 [@tailcall]) st
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy239 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy244 [@tailcall]) st
+        else (yy243 [@tailcall]) st
+      ) else (
+        (yy243 [@tailcall]) st
+      )
+
+and yy245 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy238 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy245 [@tailcall]) st
+        else (yy243 [@tailcall]) st
+      ) else (
+        (yy243 [@tailcall]) st
+      )
+
+and yy246 (st : tokenizer_state) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy253 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy246 [@tailcall]) st
+        else (yy243 [@tailcall]) st
+      ) else (
+        (yy243 [@tailcall]) st
+      )
+
+and yy247 (st : tokenizer_state) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy253 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy247 [@tailcall]) st
+        else (yy243 [@tailcall]) st
+      ) else (
+        (yy243 [@tailcall]) st
+      )
+
+and yy248 (st : tokenizer_state) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy255 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy253 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy248 [@tailcall]) st
+        else (yy243 [@tailcall]) st
+      ) else (
+        (yy243 [@tailcall]) st
+      )
+
+and yy249 (st : tokenizer_state) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy253 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy249 [@tailcall]) st
+        else (yy243 [@tailcall]) st
+      ) else (
+        (yy243 [@tailcall]) st
+      )
+
+and yy250 (st : tokenizer_state) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy256 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy250 [@tailcall]) st
+        else (yy243 [@tailcall]) st
+      ) else (
+        (yy243 [@tailcall]) st
+      )
+
+and yy251 (st : tokenizer_state) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy256 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy251 [@tailcall]) st
+        else (yy243 [@tailcall]) st
+      ) else (
+        (yy243 [@tailcall]) st
+      )
+
+and yy252 (st : tokenizer_state) : unit =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy256 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy252 [@tailcall]) st
+        else (yy243 [@tailcall]) st
+      ) else (
+        (yy243 [@tailcall]) st
+      )
+
+and yy253 (st : tokenizer_state) : unit =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy238 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy253 [@tailcall]) st
+        else (yy254 [@tailcall]) st
+      ) else (
+        (yy254 [@tailcall]) st
+      )
+
+and yy254 (st : tokenizer_state) : unit =
+  st.yycursor <- st.yymarker;
+  (yy243 [@tailcall]) st
+
+and yy255 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA7'
     | '\xAA'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy218 [@tailcall]) st
+      (yy238 [@tailcall]) st
     | '\xA8'..'\xA9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy219 [@tailcall]) st
+      (yy239 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy235 [@tailcall]) st
-        else (yy234 [@tailcall]) st
+        if (st.refill st) then (yy255 [@tailcall]) st
+        else (yy254 [@tailcall]) st
       ) else (
-        (yy234 [@tailcall]) st
+        (yy254 [@tailcall]) st
       )
 
-and yy236 (st : tokenizer_state) : unit =
+and yy256 (st : tokenizer_state) : unit =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy233 [@tailcall]) st
+      (yy253 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy236 [@tailcall]) st
-        else (yy234 [@tailcall]) st
+        if (st.refill st) then (yy256 [@tailcall]) st
+        else (yy254 [@tailcall]) st
       ) else (
-        (yy234 [@tailcall]) st
+        (yy254 [@tailcall]) st
       )
 
-and yy237 (st : tokenizer_state) : unit =
+and yy257 (st : tokenizer_state) : unit =
   error st "A multiline string must start with newline"
 
 and validate_multiline_start (st : tokenizer_state) : unit =
-  (yy216 [@tailcall]) st
+  (yy236 [@tailcall]) st
 
 
 
 
-let rec yy238 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+let rec yy258 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   save_start_position st;
-  (yy239 [@tailcall]) st rollback_pos
+  (yy259 [@tailcall]) st rollback_pos
 
-and yy239 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy259 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\n'..'\x0C' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy242 [@tailcall]) st rollback_pos
-    | '\r' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy244 [@tailcall]) st rollback_pos
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy245 [@tailcall]) st rollback_pos
-    | '\\' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy246 [@tailcall]) st rollback_pos
-    | '\xC2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy247 [@tailcall]) st rollback_pos
-    | '\xE2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy248 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy239 [@tailcall]) st rollback_pos
-        else (yy290 [@tailcall]) st rollback_pos
-      ) else (
-        st.yycursor <- st.yycursor + 1;
-        (yy240 [@tailcall]) st rollback_pos
-      )
-
-and yy240 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  (yy241 [@tailcall]) st rollback_pos
-
-and yy241 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  detect_multiline_string_prefix st rollback_pos
-
-and yy242 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy249 [@tailcall]) st rollback_pos
-    | '"' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy251 [@tailcall]) st rollback_pos
-    | '\\' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy252 [@tailcall]) st rollback_pos
-    | '\xC2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy253 [@tailcall]) st rollback_pos
-    | '\xE1' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy254 [@tailcall]) st rollback_pos
-    | '\xE2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy255 [@tailcall]) st rollback_pos
-    | '\xE3' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy256 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy242 [@tailcall]) st rollback_pos
-        else (yy243 [@tailcall]) st rollback_pos
-      ) else (
-        (yy243 [@tailcall]) st rollback_pos
-      )
-
-and yy243 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  newline st; detect_multiline_string_prefix st rollback_pos
-
-and yy244 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy249 [@tailcall]) st rollback_pos
-    | '\n' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy242 [@tailcall]) st rollback_pos
-    | '"' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy251 [@tailcall]) st rollback_pos
-    | '\\' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy252 [@tailcall]) st rollback_pos
-    | '\xC2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy253 [@tailcall]) st rollback_pos
-    | '\xE1' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy254 [@tailcall]) st rollback_pos
-    | '\xE2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy255 [@tailcall]) st rollback_pos
-    | '\xE3' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy256 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy244 [@tailcall]) st rollback_pos
-        else (yy243 [@tailcall]) st rollback_pos
-      ) else (
-        (yy243 [@tailcall]) st rollback_pos
-      )
-
-and yy245 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy257 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy245 [@tailcall]) st rollback_pos
-        else (yy241 [@tailcall]) st rollback_pos
-      ) else (
-        (yy241 [@tailcall]) st rollback_pos
-      )
-
-and yy246 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy258 [@tailcall]) st rollback_pos
-    | '\n'..'\x0C' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy260 [@tailcall]) st rollback_pos
-    | '\r' ->
       st.yycursor <- st.yycursor + 1;
       (yy262 [@tailcall]) st rollback_pos
-    | '"'
-    | '\\' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy263 [@tailcall]) st rollback_pos
-    | '\xC2' ->
+    | '\r' ->
       st.yycursor <- st.yycursor + 1;
       (yy264 [@tailcall]) st rollback_pos
-    | '\xE1' ->
+    | '"' ->
       st.yycursor <- st.yycursor + 1;
       (yy265 [@tailcall]) st rollback_pos
-    | '\xE2' ->
+    | '\\' ->
       st.yycursor <- st.yycursor + 1;
       (yy266 [@tailcall]) st rollback_pos
-    | '\xE3' ->
+    | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
       (yy267 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy246 [@tailcall]) st rollback_pos
-        else (yy241 [@tailcall]) st rollback_pos
-      ) else (
-        (yy241 [@tailcall]) st rollback_pos
-      )
-
-and yy247 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x85' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy242 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy247 [@tailcall]) st rollback_pos
-        else (yy241 [@tailcall]) st rollback_pos
-      ) else (
-        (yy241 [@tailcall]) st rollback_pos
-      )
-
-and yy248 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
+    | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
       (yy268 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy248 [@tailcall]) st rollback_pos
-        else (yy241 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy259 [@tailcall]) st rollback_pos
+        else (yy310 [@tailcall]) st rollback_pos
       ) else (
-        (yy241 [@tailcall]) st rollback_pos
+        st.yycursor <- st.yycursor + 1;
+        (yy260 [@tailcall]) st rollback_pos
       )
-
-and yy249 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy249 [@tailcall]) st rollback_pos
-    | '"' ->
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy251 [@tailcall]) st rollback_pos
-    | '\\' ->
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy252 [@tailcall]) st rollback_pos
-    | '\xC2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy253 [@tailcall]) st rollback_pos
-    | '\xE1' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy254 [@tailcall]) st rollback_pos
-    | '\xE2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy255 [@tailcall]) st rollback_pos
-    | '\xE3' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy256 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy249 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-
-and yy250 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  st.yycursor <- st.yymarker;
-  match st.yyaccept with
-    | 0 -> (yy243 [@tailcall]) st rollback_pos
-    | 1 -> (yy241 [@tailcall]) st rollback_pos
-    | _ -> (yy259 [@tailcall]) st rollback_pos
-
-and yy251 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy269 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy251 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-
-and yy252 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00'
-    | '"' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy252 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-    | _ -> (yy271 [@tailcall]) st rollback_pos yych
-
-and yy253 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy249 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy253 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-
-and yy254 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy276 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy254 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-
-and yy255 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy277 [@tailcall]) st rollback_pos
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy278 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy255 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-
-and yy256 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy276 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy256 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-
-and yy257 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy279 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy257 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-
-and yy258 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 2;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy258 [@tailcall]) st rollback_pos
-    | '\xC2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy280 [@tailcall]) st rollback_pos
-    | '\xE1' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy265 [@tailcall]) st rollback_pos
-    | '\xE2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy281 [@tailcall]) st rollback_pos
-    | '\xE3' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy267 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy258 [@tailcall]) st rollback_pos
-        else (yy259 [@tailcall]) st rollback_pos
-      ) else (
-        (yy259 [@tailcall]) st rollback_pos
-      )
-
-and yy259 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  whitespace_escape st; detect_multiline_string_prefix st rollback_pos
 
 and yy260 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   (yy261 [@tailcall]) st rollback_pos
 
 and yy261 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  
-    newline st;
-    whitespace_escape st;
-    detect_multiline_string_prefix st rollback_pos
-
+  detect_multiline_string_prefix st rollback_pos
 
 and yy262 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\n' ->
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy260 [@tailcall]) st rollback_pos
+      (yy269 [@tailcall]) st rollback_pos
+    | '"' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy271 [@tailcall]) st rollback_pos
+    | '\\' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy272 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy273 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy274 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy275 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy276 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy262 [@tailcall]) st rollback_pos
+        else (yy263 [@tailcall]) st rollback_pos
+      ) else (
+        (yy263 [@tailcall]) st rollback_pos
+      )
+
+and yy263 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  newline st; detect_multiline_string_prefix st rollback_pos
+
+and yy264 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy269 [@tailcall]) st rollback_pos
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy262 [@tailcall]) st rollback_pos
+    | '"' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy271 [@tailcall]) st rollback_pos
+    | '\\' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy272 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy273 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy274 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy275 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy276 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy264 [@tailcall]) st rollback_pos
+        else (yy263 [@tailcall]) st rollback_pos
+      ) else (
+        (yy263 [@tailcall]) st rollback_pos
+      )
+
+and yy265 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy277 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy265 [@tailcall]) st rollback_pos
         else (yy261 [@tailcall]) st rollback_pos
       ) else (
         (yy261 [@tailcall]) st rollback_pos
       )
 
-and yy263 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  detect_multiline_string_prefix st rollback_pos
-
-and yy264 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy266 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x85' ->
+    | '\t'
+    | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy260 [@tailcall]) st rollback_pos
-    | '\xA0' ->
+      (yy278 [@tailcall]) st rollback_pos
+    | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy258 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy264 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-
-and yy265 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x9A' ->
+      (yy280 [@tailcall]) st rollback_pos
+    | '\r' ->
       st.yycursor <- st.yycursor + 1;
       (yy282 [@tailcall]) st rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy265 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
-      ) else (
-        (yy250 [@tailcall]) st rollback_pos
-      )
-
-and yy266 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
+    | '"'
+    | '\\' ->
       st.yycursor <- st.yycursor + 1;
       (yy283 [@tailcall]) st rollback_pos
-    | '\x81' ->
+    | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
       (yy284 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy285 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy286 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy287 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy266 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy261 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy261 [@tailcall]) st rollback_pos
       )
 
 and yy267 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy282 [@tailcall]) st rollback_pos
+      (yy262 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy267 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy261 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy261 [@tailcall]) st rollback_pos
       )
 
 and yy268 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\xA8'..'\xA9' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy242 [@tailcall]) st rollback_pos
+      (yy288 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy268 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy261 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy261 [@tailcall]) st rollback_pos
       )
 
 and yy269 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '"' ->
+    | '\t'
+    | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy285 [@tailcall]) st rollback_pos
+      (yy269 [@tailcall]) st rollback_pos
+    | '"' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy271 [@tailcall]) st rollback_pos
+    | '\\' ->
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy272 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy273 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy274 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy275 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy276 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy269 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
 and yy270 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  (yy271 [@tailcall]) st rollback_pos yych
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy263 [@tailcall]) st rollback_pos
+    | 1 -> (yy261 [@tailcall]) st rollback_pos
+    | _ -> (yy279 [@tailcall]) st rollback_pos
 
-and yy271 (st : tokenizer_state) (rollback_pos : Lexing.position) (yych : char) : string =
+and yy271 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\t'..'\r'
-    | ' ' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy270 [@tailcall]) st rollback_pos
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy251 [@tailcall]) st rollback_pos
-    | '\xC2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy272 [@tailcall]) st rollback_pos
-    | '\xE1' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy273 [@tailcall]) st rollback_pos
-    | '\xE2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy274 [@tailcall]) st rollback_pos
-    | '\xE3' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy275 [@tailcall]) st rollback_pos
+      (yy289 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy270 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy271 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
 and yy272 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x85'
-    | '\xA0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy270 [@tailcall]) st rollback_pos
-    | _ ->
+    | '\x00'
+    | '"' ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy272 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
+    | _ -> (yy291 [@tailcall]) st rollback_pos yych
 
 and yy273 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x9A' ->
+    | '\xA0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy286 [@tailcall]) st rollback_pos
+      (yy269 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy273 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
 and yy274 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\x9A' ->
       st.yycursor <- st.yycursor + 1;
-      (yy287 [@tailcall]) st rollback_pos
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy288 [@tailcall]) st rollback_pos
+      (yy296 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy274 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
 and yy275 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
@@ -4313,13 +4420,16 @@ and yy275 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy286 [@tailcall]) st rollback_pos
+      (yy297 [@tailcall]) st rollback_pos
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy298 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy275 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
 and yy276 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
@@ -4327,128 +4437,398 @@ and yy276 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy249 [@tailcall]) st rollback_pos
+      (yy296 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy276 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
 and yy277 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
+    | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy249 [@tailcall]) st rollback_pos
+      (yy299 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy277 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
 and yy278 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 2;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy278 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy300 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy285 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy301 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy287 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy278 [@tailcall]) st rollback_pos
+        else (yy279 [@tailcall]) st rollback_pos
+      ) else (
+        (yy279 [@tailcall]) st rollback_pos
+      )
+
+and yy279 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  whitespace_escape st; detect_multiline_string_prefix st rollback_pos
+
+and yy280 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  (yy281 [@tailcall]) st rollback_pos
+
+and yy281 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  
+    newline st;
+    whitespace_escape st;
+    detect_multiline_string_prefix st rollback_pos
+
+
+and yy282 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy280 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy282 [@tailcall]) st rollback_pos
+        else (yy281 [@tailcall]) st rollback_pos
+      ) else (
+        (yy281 [@tailcall]) st rollback_pos
+      )
+
+and yy283 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  detect_multiline_string_prefix st rollback_pos
+
+and yy284 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy280 [@tailcall]) st rollback_pos
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy278 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy284 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy285 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy302 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy285 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy286 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy303 [@tailcall]) st rollback_pos
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy304 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy286 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy287 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy302 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy287 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy288 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy262 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy288 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy289 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy305 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy289 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy290 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  (yy291 [@tailcall]) st rollback_pos yych
+
+and yy291 (st : tokenizer_state) (rollback_pos : Lexing.position) (yych : char) : string =
+  match yych with
+    | '\t'..'\r'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy290 [@tailcall]) st rollback_pos
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy271 [@tailcall]) st rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy292 [@tailcall]) st rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy293 [@tailcall]) st rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy294 [@tailcall]) st rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy295 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy290 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy292 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x85'
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy290 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy292 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy293 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy306 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy293 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy294 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy307 [@tailcall]) st rollback_pos
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy308 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy294 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy295 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy306 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy295 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy296 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy269 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy296 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy297 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy269 [@tailcall]) st rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy297 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
+      ) else (
+        (yy270 [@tailcall]) st rollback_pos
+      )
+
+and yy298 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy249 [@tailcall]) st rollback_pos
+      (yy269 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy278 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy298 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy279 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy299 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   
     rollback_start_to_newline st;
     error st "Invalid multiline string: non-whitespace prefix"
 
 
-and yy280 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy300 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy258 [@tailcall]) st rollback_pos
+      (yy278 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy280 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy300 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy281 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy301 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy289 [@tailcall]) st rollback_pos
+      (yy309 [@tailcall]) st rollback_pos
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy284 [@tailcall]) st rollback_pos
+      (yy304 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy281 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy301 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy282 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy302 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy258 [@tailcall]) st rollback_pos
+      (yy278 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy282 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy302 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy283 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy303 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy258 [@tailcall]) st rollback_pos
+      (yy278 [@tailcall]) st rollback_pos
     | '\xA8'..'\xA9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy260 [@tailcall]) st rollback_pos
+      (yy280 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy283 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy303 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy284 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy304 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy258 [@tailcall]) st rollback_pos
+      (yy278 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy284 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy304 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy285 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy305 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   st.t1 <- st.yyt1;
   st.t2 <- st.yyt2;
   
@@ -4456,477 +4836,477 @@ and yy285 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
     substr st st.t1 st.t2
 
 
-and yy286 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy306 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy270 [@tailcall]) st rollback_pos
+      (yy290 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy286 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy306 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy287 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy307 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xA8'..'\xA9'
     | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy270 [@tailcall]) st rollback_pos
+      (yy290 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy287 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy307 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy288 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy308 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy270 [@tailcall]) st rollback_pos
+      (yy290 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy288 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy308 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy289 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy309 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy258 [@tailcall]) st rollback_pos
+      (yy278 [@tailcall]) st rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy289 [@tailcall]) st rollback_pos
-        else (yy250 [@tailcall]) st rollback_pos
+        if (st.refill st) then (yy309 [@tailcall]) st rollback_pos
+        else (yy270 [@tailcall]) st rollback_pos
       ) else (
-        (yy250 [@tailcall]) st rollback_pos
+        (yy270 [@tailcall]) st rollback_pos
       )
 
-and yy290 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
+and yy310 (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
   error st "Unterminated multiline string"
 
 and detect_multiline_string_prefix (st : tokenizer_state) (rollback_pos : Lexing.position) : string =
-  (yy238 [@tailcall]) st rollback_pos
+  (yy258 [@tailcall]) st rollback_pos
 
 
 
 
-let rec yy291 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+let rec yy311 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   save_start_position st;
-  (yy292 [@tailcall]) st exp_hashlen rollback_pos
-
-and yy292 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\n'..'\x0C' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy295 [@tailcall]) st exp_hashlen rollback_pos
-    | '\r' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy297 [@tailcall]) st exp_hashlen rollback_pos
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy298 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xC2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy299 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy300 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy292 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy320 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        st.yycursor <- st.yycursor + 1;
-        (yy293 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy293 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  (yy294 [@tailcall]) st exp_hashlen rollback_pos
-
-and yy294 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
-
-and yy295 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy301 [@tailcall]) st exp_hashlen rollback_pos
-    | '"' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy303 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xC2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy304 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE1' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy305 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy306 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE3' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy307 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy295 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy296 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy296 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy296 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  newline st; detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
-
-and yy297 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 0;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy301 [@tailcall]) st exp_hashlen rollback_pos
-    | '\n' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy295 [@tailcall]) st exp_hashlen rollback_pos
-    | '"' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy303 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xC2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy304 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE1' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy305 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE2' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy306 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE3' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy307 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy297 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy296 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy296 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy298 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy308 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy298 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy294 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy294 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy299 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x85' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy295 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy299 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy294 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy294 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy300 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  st.yyaccept <- 1;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy309 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy300 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy294 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy294 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy301 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy301 [@tailcall]) st exp_hashlen rollback_pos
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy303 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xC2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy304 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE1' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy305 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy306 [@tailcall]) st exp_hashlen rollback_pos
-    | '\xE3' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy307 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy301 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy302 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  st.yycursor <- st.yymarker;
-  if (st.yyaccept == 0) then (yy296 [@tailcall]) st exp_hashlen rollback_pos
-  else (yy294 [@tailcall]) st exp_hashlen rollback_pos
-
-and yy303 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy310 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy303 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy304 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy301 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy304 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy305 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy311 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy305 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy306 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy312 [@tailcall]) st exp_hashlen rollback_pos
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy313 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy306 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy307 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy311 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy307 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy308 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy314 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy308 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy309 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy295 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy309 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy310 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy315 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy310 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
-
-and yy311 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy301 [@tailcall]) st exp_hashlen rollback_pos
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy311 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
-      )
+  (yy312 [@tailcall]) st exp_hashlen rollback_pos
 
 and yy312 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
+    | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy301 [@tailcall]) st exp_hashlen rollback_pos
+      (yy315 [@tailcall]) st exp_hashlen rollback_pos
+    | '\r' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy317 [@tailcall]) st exp_hashlen rollback_pos
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy318 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy319 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy320 [@tailcall]) st exp_hashlen rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy312 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy340 [@tailcall]) st exp_hashlen rollback_pos
       ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
+        st.yycursor <- st.yycursor + 1;
+        (yy313 [@tailcall]) st exp_hashlen rollback_pos
       )
 
 and yy313 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  (yy314 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy314 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
+
+and yy315 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy321 [@tailcall]) st exp_hashlen rollback_pos
+    | '"' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy323 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy324 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy325 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy327 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy315 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy316 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy316 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy316 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  newline st; detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
+
+and yy317 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 0;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy321 [@tailcall]) st exp_hashlen rollback_pos
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy315 [@tailcall]) st exp_hashlen rollback_pos
+    | '"' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy323 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy324 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy325 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy327 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy317 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy316 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy316 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy318 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy328 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy318 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy314 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy314 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy319 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy315 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy319 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy314 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy314 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy320 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yyaccept <- 1;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy329 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy320 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy314 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy314 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy321 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy321 [@tailcall]) st exp_hashlen rollback_pos
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy323 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy324 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy325 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy326 [@tailcall]) st exp_hashlen rollback_pos
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy327 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy321 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy322 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  st.yycursor <- st.yymarker;
+  if (st.yyaccept == 0) then (yy316 [@tailcall]) st exp_hashlen rollback_pos
+  else (yy314 [@tailcall]) st exp_hashlen rollback_pos
+
+and yy323 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy330 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy323 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy324 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy321 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy324 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy325 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy331 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy325 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy326 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy332 [@tailcall]) st exp_hashlen rollback_pos
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy333 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy326 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy327 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy331 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy327 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy328 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy334 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy328 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy329 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy315 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy329 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy330 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy335 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy330 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy331 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy321 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy331 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy332 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy321 [@tailcall]) st exp_hashlen rollback_pos
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy332 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      ) else (
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
+      )
+
+and yy333 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy301 [@tailcall]) st exp_hashlen rollback_pos
+      (yy321 [@tailcall]) st exp_hashlen rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy313 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
+        if (st.refill st) then (yy333 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
       ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
       )
 
-and yy314 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+and yy334 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '#' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy316 [@tailcall]) st exp_hashlen rollback_pos
+      (yy336 [@tailcall]) st exp_hashlen rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy314 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
+        if (st.refill st) then (yy334 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
       ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
       )
 
-and yy315 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+and yy335 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '#' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy318 [@tailcall]) st exp_hashlen rollback_pos
+      (yy338 [@tailcall]) st exp_hashlen rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy315 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy302 [@tailcall]) st exp_hashlen rollback_pos
+        if (st.refill st) then (yy335 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy322 [@tailcall]) st exp_hashlen rollback_pos
       ) else (
-        (yy302 [@tailcall]) st exp_hashlen rollback_pos
+        (yy322 [@tailcall]) st exp_hashlen rollback_pos
       )
 
-and yy316 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+and yy336 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '#' ->
       st.yycursor <- st.yycursor + 1;
-      (yy316 [@tailcall]) st exp_hashlen rollback_pos
+      (yy336 [@tailcall]) st exp_hashlen rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy316 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy317 [@tailcall]) st exp_hashlen rollback_pos
+        if (st.refill st) then (yy336 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy337 [@tailcall]) st exp_hashlen rollback_pos
       ) else (
-        (yy317 [@tailcall]) st exp_hashlen rollback_pos
+        (yy337 [@tailcall]) st exp_hashlen rollback_pos
       )
 
-and yy317 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+and yy337 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   st.t1 <- st.yyt1;
   
     if st.yycursor - st.t1 >= exp_hashlen then begin
@@ -4935,21 +5315,21 @@ and yy317 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.posi
     end else detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
 
 
-and yy318 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+and yy338 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '#' ->
       st.yycursor <- st.yycursor + 1;
-      (yy318 [@tailcall]) st exp_hashlen rollback_pos
+      (yy338 [@tailcall]) st exp_hashlen rollback_pos
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy318 [@tailcall]) st exp_hashlen rollback_pos
-        else (yy319 [@tailcall]) st exp_hashlen rollback_pos
+        if (st.refill st) then (yy338 [@tailcall]) st exp_hashlen rollback_pos
+        else (yy339 [@tailcall]) st exp_hashlen rollback_pos
       ) else (
-        (yy319 [@tailcall]) st exp_hashlen rollback_pos
+        (yy339 [@tailcall]) st exp_hashlen rollback_pos
       )
 
-and yy319 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+and yy339 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   st.t1 <- st.yyt1;
   st.t3 <- st.yyt2;
   st.t2 <- st.yyt2;
@@ -4961,11 +5341,11 @@ and yy319 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.posi
     end else detect_raw_multiline_string_prefix st exp_hashlen rollback_pos
 
 
-and yy320 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
+and yy340 (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
   error st "Unterminated raw multiline string"
 
 and detect_raw_multiline_string_prefix (st : tokenizer_state) (exp_hashlen : int) (rollback_pos : Lexing.position) : string =
-  (yy291 [@tailcall]) st exp_hashlen rollback_pos
+  (yy311 [@tailcall]) st exp_hashlen rollback_pos
 
 
 
@@ -4991,11 +5371,11 @@ let multiline_contents strbuf =
   if len <= 1 then "" else Buffer.sub strbuf 1 (len - 2)
 
 
-let rec yy322 (st : tokenizer_state) (prefix : string) : token =
+let rec yy342 (st : tokenizer_state) (prefix : string) : token =
   save_start_position st;
-  (yy323 [@tailcall]) st prefix
+  (yy343 [@tailcall]) st prefix
 
-and yy323 (st : tokenizer_state) (prefix : string) : token =
+and yy343 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -5003,76 +5383,76 @@ and yy323 (st : tokenizer_state) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy323 [@tailcall]) st prefix
-        else (yy412 [@tailcall]) st prefix
+        if (st.refill st) then (yy343 [@tailcall]) st prefix
+        else (yy432 [@tailcall]) st prefix
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy324 [@tailcall]) st prefix
+        (yy344 [@tailcall]) st prefix
       )
     | '\t'
     | ' '..'!'
     | '#'..'['
     | ']'..'~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy325 [@tailcall]) st prefix
+      (yy345 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy327 [@tailcall]) st prefix
+      (yy347 [@tailcall]) st prefix
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy329 [@tailcall]) st prefix
+      (yy349 [@tailcall]) st prefix
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy330 [@tailcall]) st prefix
+      (yy350 [@tailcall]) st prefix
     | '\\' ->
       st.yycursor <- st.yycursor + 1;
-      (yy331 [@tailcall]) st prefix
+      (yy351 [@tailcall]) st prefix
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy334 [@tailcall]) st prefix
+      (yy354 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy335 [@tailcall]) st prefix
+      (yy355 [@tailcall]) st prefix
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy336 [@tailcall]) st prefix
+      (yy356 [@tailcall]) st prefix
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy337 [@tailcall]) st prefix
+      (yy357 [@tailcall]) st prefix
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy338 [@tailcall]) st prefix
+      (yy358 [@tailcall]) st prefix
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy339 [@tailcall]) st prefix
+      (yy359 [@tailcall]) st prefix
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy340 [@tailcall]) st prefix
+      (yy360 [@tailcall]) st prefix
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy341 [@tailcall]) st prefix
+      (yy361 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy342 [@tailcall]) st prefix
+      (yy362 [@tailcall]) st prefix
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy343 [@tailcall]) st prefix
+      (yy363 [@tailcall]) st prefix
     | _ ->
       st.yycursor <- st.yycursor + 1;
-      (yy332 [@tailcall]) st prefix
+      (yy352 [@tailcall]) st prefix
 
-and yy324 (st : tokenizer_state) (prefix : string) : token =
+and yy344 (st : tokenizer_state) (prefix : string) : token =
   error st "Illegal character"
 
-and yy325 (st : tokenizer_state) (prefix : string) : token =
-  (yy326 [@tailcall]) st prefix
+and yy345 (st : tokenizer_state) (prefix : string) : token =
+  (yy346 [@tailcall]) st prefix
 
-and yy326 (st : tokenizer_state) (prefix : string) : token =
+and yy346 (st : tokenizer_state) (prefix : string) : token =
   add_lexeme_to_buf st st.info.strbuf; yyfnmulti st prefix
 
-and yy327 (st : tokenizer_state) (prefix : string) : token =
+and yy347 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -5082,91 +5462,91 @@ and yy327 (st : tokenizer_state) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '!'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy327 [@tailcall]) st prefix
-        else (yy328 [@tailcall]) st prefix
+        if (st.refill st) then (yy347 [@tailcall]) st prefix
+        else (yy348 [@tailcall]) st prefix
       ) else (
         st.yyt1 <- st.yycursor;
         st.yyt2 <- st.yycursor;
         st.yycursor <- st.yycursor + 1;
-        (yy344 [@tailcall]) st prefix
+        (yy364 [@tailcall]) st prefix
       )
     | '\t'
     | ' ' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy345 [@tailcall]) st prefix
+      (yy365 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy347 [@tailcall]) st prefix
+      (yy367 [@tailcall]) st prefix
     | '\r' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy349 [@tailcall]) st prefix
+      (yy369 [@tailcall]) st prefix
     | '\xC2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy350 [@tailcall]) st prefix
+      (yy370 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
+      (yy371 [@tailcall]) st prefix
     | '\xE0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy352 [@tailcall]) st prefix
+      (yy372 [@tailcall]) st prefix
     | '\xE1' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy353 [@tailcall]) st prefix
+      (yy373 [@tailcall]) st prefix
     | '\xE2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy354 [@tailcall]) st prefix
+      (yy374 [@tailcall]) st prefix
     | '\xE3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy355 [@tailcall]) st prefix
+      (yy375 [@tailcall]) st prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy356 [@tailcall]) st prefix
+      (yy376 [@tailcall]) st prefix
     | '\xED' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy357 [@tailcall]) st prefix
+      (yy377 [@tailcall]) st prefix
     | '\xF0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy358 [@tailcall]) st prefix
+      (yy378 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy359 [@tailcall]) st prefix
+      (yy379 [@tailcall]) st prefix
     | '\xF4' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy360 [@tailcall]) st prefix
-    | _ -> (yy328 [@tailcall]) st prefix
+      (yy380 [@tailcall]) st prefix
+    | _ -> (yy348 [@tailcall]) st prefix
 
-and yy328 (st : tokenizer_state) (prefix : string) : token =
+and yy348 (st : tokenizer_state) (prefix : string) : token =
   newline st; yyfnmulti st prefix
 
-and yy329 (st : tokenizer_state) (prefix : string) : token =
+and yy349 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -5176,109 +5556,109 @@ and yy329 (st : tokenizer_state) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '!'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy329 [@tailcall]) st prefix
-        else (yy328 [@tailcall]) st prefix
+        if (st.refill st) then (yy349 [@tailcall]) st prefix
+        else (yy348 [@tailcall]) st prefix
       ) else (
         st.yyt1 <- st.yycursor;
         st.yyt2 <- st.yycursor;
         st.yycursor <- st.yycursor + 1;
-        (yy344 [@tailcall]) st prefix
+        (yy364 [@tailcall]) st prefix
       )
     | '\t'
     | ' ' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy345 [@tailcall]) st prefix
+      (yy365 [@tailcall]) st prefix
     | '\n' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy361 [@tailcall]) st prefix
+      (yy381 [@tailcall]) st prefix
     | '\x0B'..'\x0C' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy347 [@tailcall]) st prefix
+      (yy367 [@tailcall]) st prefix
     | '\r' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy349 [@tailcall]) st prefix
+      (yy369 [@tailcall]) st prefix
     | '\xC2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy350 [@tailcall]) st prefix
+      (yy370 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
+      (yy371 [@tailcall]) st prefix
     | '\xE0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy352 [@tailcall]) st prefix
+      (yy372 [@tailcall]) st prefix
     | '\xE1' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy353 [@tailcall]) st prefix
+      (yy373 [@tailcall]) st prefix
     | '\xE2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy354 [@tailcall]) st prefix
+      (yy374 [@tailcall]) st prefix
     | '\xE3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy355 [@tailcall]) st prefix
+      (yy375 [@tailcall]) st prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy356 [@tailcall]) st prefix
+      (yy376 [@tailcall]) st prefix
     | '\xED' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy357 [@tailcall]) st prefix
+      (yy377 [@tailcall]) st prefix
     | '\xF0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy358 [@tailcall]) st prefix
+      (yy378 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy359 [@tailcall]) st prefix
+      (yy379 [@tailcall]) st prefix
     | '\xF4' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy360 [@tailcall]) st prefix
-    | _ -> (yy328 [@tailcall]) st prefix
+      (yy380 [@tailcall]) st prefix
+    | _ -> (yy348 [@tailcall]) st prefix
 
-and yy330 (st : tokenizer_state) (prefix : string) : token =
+and yy350 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy362 [@tailcall]) st prefix
+      (yy382 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy330 [@tailcall]) st prefix
-        else (yy326 [@tailcall]) st prefix
+        if (st.refill st) then (yy350 [@tailcall]) st prefix
+        else (yy346 [@tailcall]) st prefix
       ) else (
-        (yy326 [@tailcall]) st prefix
+        (yy346 [@tailcall]) st prefix
       )
 
-and yy331 (st : tokenizer_state) (prefix : string) : token =
+and yy351 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -5294,194 +5674,194 @@ and yy331 (st : tokenizer_state) (prefix : string) : token =
     | 'o'..'q'
     | 'v'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy331 [@tailcall]) st prefix
-        else (yy326 [@tailcall]) st prefix
+        if (st.refill st) then (yy351 [@tailcall]) st prefix
+        else (yy346 [@tailcall]) st prefix
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy363 [@tailcall]) st prefix
+        (yy383 [@tailcall]) st prefix
       )
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy365 [@tailcall]) st prefix
+      (yy385 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy367 [@tailcall]) st prefix
+      (yy387 [@tailcall]) st prefix
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy369 [@tailcall]) st prefix
+      (yy389 [@tailcall]) st prefix
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy370 [@tailcall]) st prefix
+      (yy390 [@tailcall]) st prefix
     | '\\' ->
       st.yycursor <- st.yycursor + 1;
-      (yy371 [@tailcall]) st prefix
+      (yy391 [@tailcall]) st prefix
     | 'b' ->
       st.yycursor <- st.yycursor + 1;
-      (yy372 [@tailcall]) st prefix
+      (yy392 [@tailcall]) st prefix
     | 'f' ->
       st.yycursor <- st.yycursor + 1;
-      (yy373 [@tailcall]) st prefix
+      (yy393 [@tailcall]) st prefix
     | 'n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy374 [@tailcall]) st prefix
+      (yy394 [@tailcall]) st prefix
     | 'r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy375 [@tailcall]) st prefix
+      (yy395 [@tailcall]) st prefix
     | 's' ->
       st.yycursor <- st.yycursor + 1;
-      (yy376 [@tailcall]) st prefix
+      (yy396 [@tailcall]) st prefix
     | 't' ->
       st.yycursor <- st.yycursor + 1;
-      (yy377 [@tailcall]) st prefix
+      (yy397 [@tailcall]) st prefix
     | 'u' ->
       st.yycursor <- st.yycursor + 1;
-      (yy378 [@tailcall]) st prefix
+      (yy398 [@tailcall]) st prefix
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy379 [@tailcall]) st prefix
+      (yy399 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy380 [@tailcall]) st prefix
+      (yy400 [@tailcall]) st prefix
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy381 [@tailcall]) st prefix
+      (yy401 [@tailcall]) st prefix
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy382 [@tailcall]) st prefix
+      (yy402 [@tailcall]) st prefix
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy383 [@tailcall]) st prefix
+      (yy403 [@tailcall]) st prefix
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy384 [@tailcall]) st prefix
+      (yy404 [@tailcall]) st prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy385 [@tailcall]) st prefix
+      (yy405 [@tailcall]) st prefix
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy386 [@tailcall]) st prefix
+      (yy406 [@tailcall]) st prefix
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy387 [@tailcall]) st prefix
+      (yy407 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy388 [@tailcall]) st prefix
+      (yy408 [@tailcall]) st prefix
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy389 [@tailcall]) st prefix
-    | _ -> (yy326 [@tailcall]) st prefix
+      (yy409 [@tailcall]) st prefix
+    | _ -> (yy346 [@tailcall]) st prefix
 
-and yy332 (st : tokenizer_state) (prefix : string) : token =
-  (yy333 [@tailcall]) st prefix
+and yy352 (st : tokenizer_state) (prefix : string) : token =
+  (yy353 [@tailcall]) st prefix
 
-and yy333 (st : tokenizer_state) (prefix : string) : token =
+and yy353 (st : tokenizer_state) (prefix : string) : token =
   malformed_utf8 st
 
-and yy334 (st : tokenizer_state) (prefix : string) : token =
+and yy354 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy325 [@tailcall]) st prefix
+      (yy345 [@tailcall]) st prefix
     | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy327 [@tailcall]) st prefix
+      (yy347 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy334 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy354 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy335 (st : tokenizer_state) (prefix : string) : token =
+and yy355 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy325 [@tailcall]) st prefix
+      (yy345 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy335 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy355 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy336 (st : tokenizer_state) (prefix : string) : token =
+and yy356 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy390 [@tailcall]) st prefix
+      (yy410 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy336 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy356 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy337 (st : tokenizer_state) (prefix : string) : token =
+and yy357 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy390 [@tailcall]) st prefix
+      (yy410 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy337 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy357 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy338 (st : tokenizer_state) (prefix : string) : token =
+and yy358 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy391 [@tailcall]) st prefix
+      (yy411 [@tailcall]) st prefix
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy392 [@tailcall]) st prefix
+      (yy412 [@tailcall]) st prefix
     | '\x82'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy390 [@tailcall]) st prefix
+      (yy410 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy338 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy358 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy339 (st : tokenizer_state) (prefix : string) : token =
+and yy359 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy390 [@tailcall]) st prefix
+      (yy410 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy339 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy359 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy340 (st : tokenizer_state) (prefix : string) : token =
+and yy360 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -5489,67 +5869,67 @@ and yy340 (st : tokenizer_state) (prefix : string) : token =
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy390 [@tailcall]) st prefix
+      (yy410 [@tailcall]) st prefix
     | '\xBB' ->
       st.yycursor <- st.yycursor + 1;
-      (yy393 [@tailcall]) st prefix
+      (yy413 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy340 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy360 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy341 (st : tokenizer_state) (prefix : string) : token =
+and yy361 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy394 [@tailcall]) st prefix
+      (yy414 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy341 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy361 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy342 (st : tokenizer_state) (prefix : string) : token =
+and yy362 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy394 [@tailcall]) st prefix
+      (yy414 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy342 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy362 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy343 (st : tokenizer_state) (prefix : string) : token =
+and yy363 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy394 [@tailcall]) st prefix
+      (yy414 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy343 [@tailcall]) st prefix
-        else (yy333 [@tailcall]) st prefix
+        if (st.refill st) then (yy363 [@tailcall]) st prefix
+        else (yy353 [@tailcall]) st prefix
       ) else (
-        (yy333 [@tailcall]) st prefix
+        (yy353 [@tailcall]) st prefix
       )
 
-and yy344 (st : tokenizer_state) (prefix : string) : token =
+and yy364 (st : tokenizer_state) (prefix : string) : token =
   st.t1 <- st.yyt1;
   st.t2 <- st.yyt2;
   st.yycursor <- st.yyt2;
@@ -5558,7 +5938,7 @@ and yy344 (st : tokenizer_state) (prefix : string) : token =
     yyfnmulti st prefix
 
 
-and yy345 (st : tokenizer_state) (prefix : string) : token =
+and yy365 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -5566,86 +5946,86 @@ and yy345 (st : tokenizer_state) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '!'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy345 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy365 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
         st.yyt2 <- st.yycursor;
         st.yycursor <- st.yycursor + 1;
-        (yy344 [@tailcall]) st prefix
+        (yy364 [@tailcall]) st prefix
       )
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy345 [@tailcall]) st prefix
+      (yy365 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy347 [@tailcall]) st prefix
+      (yy367 [@tailcall]) st prefix
     | '\r' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy349 [@tailcall]) st prefix
+      (yy369 [@tailcall]) st prefix
     | '\xC2' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy350 [@tailcall]) st prefix
+      (yy370 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
+      (yy371 [@tailcall]) st prefix
     | '\xE0' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy352 [@tailcall]) st prefix
+      (yy372 [@tailcall]) st prefix
     | '\xE1' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy353 [@tailcall]) st prefix
+      (yy373 [@tailcall]) st prefix
     | '\xE2' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy354 [@tailcall]) st prefix
+      (yy374 [@tailcall]) st prefix
     | '\xE3' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy355 [@tailcall]) st prefix
+      (yy375 [@tailcall]) st prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy356 [@tailcall]) st prefix
+      (yy376 [@tailcall]) st prefix
     | '\xED' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy357 [@tailcall]) st prefix
+      (yy377 [@tailcall]) st prefix
     | '\xF0' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy358 [@tailcall]) st prefix
+      (yy378 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy359 [@tailcall]) st prefix
+      (yy379 [@tailcall]) st prefix
     | '\xF4' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy360 [@tailcall]) st prefix
-    | _ -> (yy346 [@tailcall]) st prefix
+      (yy380 [@tailcall]) st prefix
+    | _ -> (yy366 [@tailcall]) st prefix
 
-and yy346 (st : tokenizer_state) (prefix : string) : token =
+and yy366 (st : tokenizer_state) (prefix : string) : token =
   st.yycursor <- st.yymarker;
   match st.yyaccept with
-    | 0 -> (yy328 [@tailcall]) st prefix
-    | 1 -> (yy326 [@tailcall]) st prefix
-    | 2 -> (yy333 [@tailcall]) st prefix
-    | 3 -> (yy348 [@tailcall]) st prefix
-    | 4 -> (yy366 [@tailcall]) st prefix
-    | _ -> (yy364 [@tailcall]) st prefix
+    | 0 -> (yy348 [@tailcall]) st prefix
+    | 1 -> (yy346 [@tailcall]) st prefix
+    | 2 -> (yy353 [@tailcall]) st prefix
+    | 3 -> (yy368 [@tailcall]) st prefix
+    | 4 -> (yy386 [@tailcall]) st prefix
+    | _ -> (yy384 [@tailcall]) st prefix
 
-and yy347 (st : tokenizer_state) (prefix : string) : token =
-  (yy348 [@tailcall]) st prefix
+and yy367 (st : tokenizer_state) (prefix : string) : token =
+  (yy368 [@tailcall]) st prefix
 
-and yy348 (st : tokenizer_state) (prefix : string) : token =
+and yy368 (st : tokenizer_state) (prefix : string) : token =
   st.t1 <- st.yyt1;
   st.yycursor <- st.yyt2;
   
@@ -5654,348 +6034,6 @@ and yy348 (st : tokenizer_state) (prefix : string) : token =
     Buffer.add_char st.info.strbuf '\n';
     (* Skip lines consisting of any whitespace only (do not check the prefix) *)
     yyfnmulti st prefix
-
-
-and yy349 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\n' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy347 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy349 [@tailcall]) st prefix
-        else (yy348 [@tailcall]) st prefix
-      ) else (
-        (yy348 [@tailcall]) st prefix
-      )
-
-and yy350 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\x9F'
-    | '\xA1'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy344 [@tailcall]) st prefix
-    | '\x85' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy347 [@tailcall]) st prefix
-    | '\xA0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy345 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy350 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy351 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy344 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy351 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy352 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy352 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy353 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x99'
-    | '\x9B'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy395 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy353 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy354 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy396 [@tailcall]) st prefix
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy397 [@tailcall]) st prefix
-    | '\x82'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy354 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy355 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy395 [@tailcall]) st prefix
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy355 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy356 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy356 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy357 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy357 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy358 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy356 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy358 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy359 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy356 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy359 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy360 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy356 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy360 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy361 (st : tokenizer_state) (prefix : string) : token =
-  st.yyaccept <- 3;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00'
-    | '\x01'..'\b'
-    | '\x0E'..'\x1F'
-    | '!'..'\x7F' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy361 [@tailcall]) st prefix
-        else (yy348 [@tailcall]) st prefix
-      ) else (
-        st.yyt1 <- st.yycursor;
-        st.yyt2 <- st.yycursor;
-        st.yycursor <- st.yycursor + 1;
-        (yy344 [@tailcall]) st prefix
-      )
-    | '\t'
-    | ' ' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy345 [@tailcall]) st prefix
-    | '\n'..'\x0C' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy347 [@tailcall]) st prefix
-    | '\r' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy349 [@tailcall]) st prefix
-    | '\xC2' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy350 [@tailcall]) st prefix
-    | '\xC3'..'\xDF' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy351 [@tailcall]) st prefix
-    | '\xE0' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy352 [@tailcall]) st prefix
-    | '\xE1' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy353 [@tailcall]) st prefix
-    | '\xE2' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy354 [@tailcall]) st prefix
-    | '\xE3' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy355 [@tailcall]) st prefix
-    | '\xE4'..'\xEC'
-    | '\xEE'..'\xEF' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy356 [@tailcall]) st prefix
-    | '\xED' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy357 [@tailcall]) st prefix
-    | '\xF0' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy358 [@tailcall]) st prefix
-    | '\xF1'..'\xF3' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy359 [@tailcall]) st prefix
-    | '\xF4' ->
-      st.yyt1 <- st.yycursor;
-      st.yyt2 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy360 [@tailcall]) st prefix
-    | _ -> (yy348 [@tailcall]) st prefix
-
-and yy362 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy398 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy362 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
-
-and yy363 (st : tokenizer_state) (prefix : string) : token =
-  (yy364 [@tailcall]) st prefix
-
-and yy364 (st : tokenizer_state) (prefix : string) : token =
-  error st "Invalid escape sequence"
-
-and yy365 (st : tokenizer_state) (prefix : string) : token =
-  st.yyaccept <- 4;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\t'
-    | ' ' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy365 [@tailcall]) st prefix
-    | '\xC2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy399 [@tailcall]) st prefix
-    | '\xE1' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy400 [@tailcall]) st prefix
-    | '\xE2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy401 [@tailcall]) st prefix
-    | '\xE3' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy402 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy365 [@tailcall]) st prefix
-        else (yy366 [@tailcall]) st prefix
-      ) else (
-        (yy366 [@tailcall]) st prefix
-      )
-
-and yy366 (st : tokenizer_state) (prefix : string) : token =
-  whitespace_escape st; string st prefix
-
-and yy367 (st : tokenizer_state) (prefix : string) : token =
-  (yy368 [@tailcall]) st prefix
-
-and yy368 (st : tokenizer_state) (prefix : string) : token =
-  
-    newline st;
-    whitespace_escape st;
-    string st prefix
 
 
 and yy369 (st : tokenizer_state) (prefix : string) : token =
@@ -6013,53 +6051,13 @@ and yy369 (st : tokenizer_state) (prefix : string) : token =
       )
 
 and yy370 (st : tokenizer_state) (prefix : string) : token =
-  Buffer.add_char st.info.strbuf '"'; string st prefix
-
-and yy371 (st : tokenizer_state) (prefix : string) : token =
-  Buffer.add_char st.info.strbuf '\\'; string st prefix
-
-and yy372 (st : tokenizer_state) (prefix : string) : token =
-  Buffer.add_char st.info.strbuf '\b'; string st prefix
-
-and yy373 (st : tokenizer_state) (prefix : string) : token =
-  Buffer.add_char st.info.strbuf '\012'; string st prefix
-
-and yy374 (st : tokenizer_state) (prefix : string) : token =
-  Buffer.add_char st.info.strbuf '\n'; string st prefix
-
-and yy375 (st : tokenizer_state) (prefix : string) : token =
-  Buffer.add_char st.info.strbuf '\r'; string st prefix
-
-and yy376 (st : tokenizer_state) (prefix : string) : token =
-  Buffer.add_char st.info.strbuf ' '; string st prefix
-
-and yy377 (st : tokenizer_state) (prefix : string) : token =
-  Buffer.add_char st.info.strbuf '\t'; string st prefix
-
-and yy378 (st : tokenizer_state) (prefix : string) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '{' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy403 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy378 [@tailcall]) st prefix
-        else (yy364 [@tailcall]) st prefix
-      ) else (
-        (yy364 [@tailcall]) st prefix
-      )
-
-and yy379 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy363 [@tailcall]) st prefix
+      (yy364 [@tailcall]) st prefix
     | '\x85' ->
       st.yycursor <- st.yycursor + 1;
       (yy367 [@tailcall]) st prefix
@@ -6068,386 +6066,458 @@ and yy379 (st : tokenizer_state) (prefix : string) : token =
       (yy365 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy379 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy370 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy380 (st : tokenizer_state) (prefix : string) : token =
+and yy371 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy363 [@tailcall]) st prefix
+      (yy364 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy380 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy371 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy381 (st : tokenizer_state) (prefix : string) : token =
+and yy372 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy380 [@tailcall]) st prefix
+      (yy371 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy381 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy372 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy382 (st : tokenizer_state) (prefix : string) : token =
+and yy373 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy380 [@tailcall]) st prefix
+      (yy371 [@tailcall]) st prefix
     | '\x9A' ->
       st.yycursor <- st.yycursor + 1;
-      (yy404 [@tailcall]) st prefix
+      (yy415 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy382 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy373 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy383 (st : tokenizer_state) (prefix : string) : token =
+and yy374 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy405 [@tailcall]) st prefix
+      (yy416 [@tailcall]) st prefix
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy406 [@tailcall]) st prefix
+      (yy417 [@tailcall]) st prefix
     | '\x82'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy380 [@tailcall]) st prefix
+      (yy371 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy383 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy374 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy384 (st : tokenizer_state) (prefix : string) : token =
+and yy375 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy404 [@tailcall]) st prefix
+      (yy415 [@tailcall]) st prefix
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy380 [@tailcall]) st prefix
+      (yy371 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy384 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy375 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy385 (st : tokenizer_state) (prefix : string) : token =
+and yy376 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy380 [@tailcall]) st prefix
+      (yy371 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy385 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy376 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy386 (st : tokenizer_state) (prefix : string) : token =
+and yy377 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy380 [@tailcall]) st prefix
+      (yy371 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy386 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy377 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy387 (st : tokenizer_state) (prefix : string) : token =
+and yy378 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy385 [@tailcall]) st prefix
+      (yy376 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy387 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy378 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy388 (st : tokenizer_state) (prefix : string) : token =
+and yy379 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy385 [@tailcall]) st prefix
+      (yy376 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy388 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy379 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy389 (st : tokenizer_state) (prefix : string) : token =
+and yy380 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
+      (yy376 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy380 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy381 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 3;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '!'..'\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy381 [@tailcall]) st prefix
+        else (yy368 [@tailcall]) st prefix
+      ) else (
+        st.yyt1 <- st.yycursor;
+        st.yyt2 <- st.yycursor;
+        st.yycursor <- st.yycursor + 1;
+        (yy364 [@tailcall]) st prefix
+      )
+    | '\t'
+    | ' ' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy365 [@tailcall]) st prefix
+    | '\n'..'\x0C' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy367 [@tailcall]) st prefix
+    | '\r' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy369 [@tailcall]) st prefix
+    | '\xC2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy370 [@tailcall]) st prefix
+    | '\xC3'..'\xDF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy371 [@tailcall]) st prefix
+    | '\xE0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy372 [@tailcall]) st prefix
+    | '\xE1' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy373 [@tailcall]) st prefix
+    | '\xE2' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy374 [@tailcall]) st prefix
+    | '\xE3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy375 [@tailcall]) st prefix
+    | '\xE4'..'\xEC'
+    | '\xEE'..'\xEF' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy376 [@tailcall]) st prefix
+    | '\xED' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy377 [@tailcall]) st prefix
+    | '\xF0' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy378 [@tailcall]) st prefix
+    | '\xF1'..'\xF3' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy379 [@tailcall]) st prefix
+    | '\xF4' ->
+      st.yyt1 <- st.yycursor;
+      st.yyt2 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy380 [@tailcall]) st prefix
+    | _ -> (yy368 [@tailcall]) st prefix
+
+and yy382 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy418 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy382 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy383 (st : tokenizer_state) (prefix : string) : token =
+  (yy384 [@tailcall]) st prefix
+
+and yy384 (st : tokenizer_state) (prefix : string) : token =
+  error st "Invalid escape sequence"
+
+and yy385 (st : tokenizer_state) (prefix : string) : token =
+  st.yyaccept <- 4;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\t'
+    | ' ' ->
+      st.yycursor <- st.yycursor + 1;
       (yy385 [@tailcall]) st prefix
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy419 [@tailcall]) st prefix
+    | '\xE1' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy420 [@tailcall]) st prefix
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy421 [@tailcall]) st prefix
+    | '\xE3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy422 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy385 [@tailcall]) st prefix
+        else (yy386 [@tailcall]) st prefix
+      ) else (
+        (yy386 [@tailcall]) st prefix
+      )
+
+and yy386 (st : tokenizer_state) (prefix : string) : token =
+  whitespace_escape st; string st prefix
+
+and yy387 (st : tokenizer_state) (prefix : string) : token =
+  (yy388 [@tailcall]) st prefix
+
+and yy388 (st : tokenizer_state) (prefix : string) : token =
+  
+    newline st;
+    whitespace_escape st;
+    string st prefix
+
+
+and yy389 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\n' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy387 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy389 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        else (yy388 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy388 [@tailcall]) st prefix
       )
 
 and yy390 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy325 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy390 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
+  Buffer.add_char st.info.strbuf '"'; string st prefix
 
 and yy391 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8D'
-    | '\x90'..'\xA7'
-    | '\xAF'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy325 [@tailcall]) st prefix
-    | '\x8E'..'\x8F'
-    | '\xAA'..'\xAE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy324 [@tailcall]) st prefix
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy327 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy391 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
+  Buffer.add_char st.info.strbuf '\\'; string st prefix
 
 and yy392 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xA5'
-    | '\xAA'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy325 [@tailcall]) st prefix
-    | '\xA6'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy324 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy392 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
+  Buffer.add_char st.info.strbuf '\b'; string st prefix
 
 and yy393 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy325 [@tailcall]) st prefix
-    | '\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy324 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy393 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
+  Buffer.add_char st.info.strbuf '\012'; string st prefix
 
 and yy394 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy390 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy394 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
+  Buffer.add_char st.info.strbuf '\n'; string st prefix
 
 and yy395 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy345 [@tailcall]) st prefix
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy344 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy395 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
+  Buffer.add_char st.info.strbuf '\r'; string st prefix
 
 and yy396 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy345 [@tailcall]) st prefix
-    | '\x8B'..'\xA7'
-    | '\xAA'..'\xAE'
-    | '\xB0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy344 [@tailcall]) st prefix
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy347 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy396 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
+  Buffer.add_char st.info.strbuf ' '; string st prefix
 
 and yy397 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9E'
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy344 [@tailcall]) st prefix
-    | '\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy345 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy397 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
-      ) else (
-        (yy346 [@tailcall]) st prefix
-      )
+  Buffer.add_char st.info.strbuf '\t'; string st prefix
 
 and yy398 (st : tokenizer_state) (prefix : string) : token =
-  QUOTED_STRING (multiline_contents st.info.strbuf)
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '{' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy423 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy398 [@tailcall]) st prefix
+        else (yy384 [@tailcall]) st prefix
+      ) else (
+        (yy384 [@tailcall]) st prefix
+      )
 
 and yy399 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\x9F'
+    | '\xA1'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy383 [@tailcall]) st prefix
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy387 [@tailcall]) st prefix
     | '\xA0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy365 [@tailcall]) st prefix
+      (yy385 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy399 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
 and yy400 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x9A' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy407 [@tailcall]) st prefix
+      (yy383 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy400 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
 and yy401 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy408 [@tailcall]) st prefix
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy409 [@tailcall]) st prefix
+      (yy400 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy401 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
 and yy402 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy407 [@tailcall]) st prefix
+      (yy400 [@tailcall]) st prefix
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy424 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy402 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
 and yy403 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '0'..'9'
-    | 'A'..'F'
-    | 'a'..'f' ->
-      st.yyt1 <- st.yycursor;
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy410 [@tailcall]) st prefix
+      (yy425 [@tailcall]) st prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy426 [@tailcall]) st prefix
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy400 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy403 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
 and yy404 (st : tokenizer_state) (prefix : string) : token =
@@ -6455,19 +6525,192 @@ and yy404 (st : tokenizer_state) (prefix : string) : token =
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy365 [@tailcall]) st prefix
+      (yy424 [@tailcall]) st prefix
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy363 [@tailcall]) st prefix
+      (yy400 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy404 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
 and yy405 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy400 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy405 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy406 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy400 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy406 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy407 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy405 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy407 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy408 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy405 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy408 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy409 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy405 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy409 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy410 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy345 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy410 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy411 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xAF'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy345 [@tailcall]) st prefix
+    | '\x8E'..'\x8F'
+    | '\xAA'..'\xAE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy344 [@tailcall]) st prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy347 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy411 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy412 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xA5'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy345 [@tailcall]) st prefix
+    | '\xA6'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy344 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy412 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy413 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy345 [@tailcall]) st prefix
+    | '\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy344 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy413 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy414 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy410 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy414 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy415 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy365 [@tailcall]) st prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy364 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy415 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy416 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
@@ -6478,99 +6721,236 @@ and yy405 (st : tokenizer_state) (prefix : string) : token =
     | '\xAA'..'\xAE'
     | '\xB0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy363 [@tailcall]) st prefix
+      (yy364 [@tailcall]) st prefix
     | '\xA8'..'\xA9' ->
       st.yycursor <- st.yycursor + 1;
       (yy367 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy405 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy416 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy406 (st : tokenizer_state) (prefix : string) : token =
+and yy417 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy363 [@tailcall]) st prefix
+      (yy364 [@tailcall]) st prefix
     | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
       (yy365 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy406 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy417 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy407 (st : tokenizer_state) (prefix : string) : token =
+and yy418 (st : tokenizer_state) (prefix : string) : token =
+  QUOTED_STRING (multiline_contents st.info.strbuf)
+
+and yy419 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy385 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy419 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy420 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy427 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy420 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy421 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy365 [@tailcall]) st prefix
+      (yy428 [@tailcall]) st prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy429 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy407 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy421 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy408 (st : tokenizer_state) (prefix : string) : token =
+and yy422 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy427 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy422 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy423 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '0'..'9'
+    | 'A'..'F'
+    | 'a'..'f' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy430 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy423 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy424 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy385 [@tailcall]) st prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy383 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy424 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy425 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8A'
     | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy365 [@tailcall]) st prefix
+      (yy385 [@tailcall]) st prefix
+    | '\x8B'..'\xA7'
+    | '\xAA'..'\xAE'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy383 [@tailcall]) st prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy387 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy408 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy425 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy409 (st : tokenizer_state) (prefix : string) : token =
+and yy426 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy383 [@tailcall]) st prefix
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy385 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy426 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy427 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy385 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy427 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy428 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy385 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy428 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
+      ) else (
+        (yy366 [@tailcall]) st prefix
+      )
+
+and yy429 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy365 [@tailcall]) st prefix
+      (yy385 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy409 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy429 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy410 (st : tokenizer_state) (prefix : string) : token =
+and yy430 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '0'..'9'
     | 'A'..'F'
     | 'a'..'f' ->
       st.yycursor <- st.yycursor + 1;
-      (yy410 [@tailcall]) st prefix
+      (yy430 [@tailcall]) st prefix
     | '}' ->
       st.yycursor <- st.yycursor + 1;
-      (yy411 [@tailcall]) st prefix
+      (yy431 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy410 [@tailcall]) st prefix
-        else (yy346 [@tailcall]) st prefix
+        if (st.refill st) then (yy430 [@tailcall]) st prefix
+        else (yy366 [@tailcall]) st prefix
       ) else (
-        (yy346 [@tailcall]) st prefix
+        (yy366 [@tailcall]) st prefix
       )
 
-and yy411 (st : tokenizer_state) (prefix : string) : token =
+and yy431 (st : tokenizer_state) (prefix : string) : token =
   st.t1 <- st.yyt1;
   st.t2 <- st.yycursor;
   st.t2 <- st.t2 - 1;
@@ -6586,17 +6966,17 @@ and yy411 (st : tokenizer_state) (prefix : string) : token =
     string st prefix
 
 
-and yy412 (st : tokenizer_state) (prefix : string) : token =
+and yy432 (st : tokenizer_state) (prefix : string) : token =
   error st "Unterminated string"
 
 and yyfnmulti (st : tokenizer_state) (prefix : string) : token =
-  (yy322 [@tailcall]) st prefix
+  (yy342 [@tailcall]) st prefix
 
-and yy413 (st : tokenizer_state) (prefix : string) : token =
+and yy433 (st : tokenizer_state) (prefix : string) : token =
   save_start_position st;
-  (yy414 [@tailcall]) st prefix
+  (yy434 [@tailcall]) st prefix
 
-and yy414 (st : tokenizer_state) (prefix : string) : token =
+and yy434 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -6604,99 +6984,99 @@ and yy414 (st : tokenizer_state) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy414 [@tailcall]) st prefix
-        else (yy481 [@tailcall]) st prefix
+        if (st.refill st) then (yy434 [@tailcall]) st prefix
+        else (yy501 [@tailcall]) st prefix
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy415 [@tailcall]) st prefix
+        (yy435 [@tailcall]) st prefix
       )
     | '\t'
     | ' '..'!'
     | '#'..'['
     | ']'..'~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy416 [@tailcall]) st prefix
+      (yy436 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy418 [@tailcall]) st prefix
+      (yy438 [@tailcall]) st prefix
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy420 [@tailcall]) st prefix
+      (yy440 [@tailcall]) st prefix
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy421 [@tailcall]) st prefix
+      (yy441 [@tailcall]) st prefix
     | '\\' ->
       st.yycursor <- st.yycursor + 1;
-      (yy422 [@tailcall]) st prefix
+      (yy442 [@tailcall]) st prefix
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy425 [@tailcall]) st prefix
+      (yy445 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy426 [@tailcall]) st prefix
+      (yy446 [@tailcall]) st prefix
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy427 [@tailcall]) st prefix
+      (yy447 [@tailcall]) st prefix
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy428 [@tailcall]) st prefix
+      (yy448 [@tailcall]) st prefix
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy429 [@tailcall]) st prefix
+      (yy449 [@tailcall]) st prefix
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy430 [@tailcall]) st prefix
+      (yy450 [@tailcall]) st prefix
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy431 [@tailcall]) st prefix
+      (yy451 [@tailcall]) st prefix
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy432 [@tailcall]) st prefix
+      (yy452 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy433 [@tailcall]) st prefix
+      (yy453 [@tailcall]) st prefix
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy434 [@tailcall]) st prefix
+      (yy454 [@tailcall]) st prefix
     | _ ->
       st.yycursor <- st.yycursor + 1;
-      (yy423 [@tailcall]) st prefix
+      (yy443 [@tailcall]) st prefix
 
-and yy415 (st : tokenizer_state) (prefix : string) : token =
+and yy435 (st : tokenizer_state) (prefix : string) : token =
   error st "Illegal character"
 
-and yy416 (st : tokenizer_state) (prefix : string) : token =
-  (yy417 [@tailcall]) st prefix
+and yy436 (st : tokenizer_state) (prefix : string) : token =
+  (yy437 [@tailcall]) st prefix
 
-and yy417 (st : tokenizer_state) (prefix : string) : token =
+and yy437 (st : tokenizer_state) (prefix : string) : token =
   add_lexeme_to_buf st st.info.strbuf; yyfnsingle st prefix
 
-and yy418 (st : tokenizer_state) (prefix : string) : token =
-  (yy419 [@tailcall]) st prefix
+and yy438 (st : tokenizer_state) (prefix : string) : token =
+  (yy439 [@tailcall]) st prefix
 
-and yy419 (st : tokenizer_state) (prefix : string) : token =
+and yy439 (st : tokenizer_state) (prefix : string) : token =
   newline st; error st "Unterminated string"
 
-and yy420 (st : tokenizer_state) (prefix : string) : token =
+and yy440 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy418 [@tailcall]) st prefix
+      (yy438 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy420 [@tailcall]) st prefix
-        else (yy419 [@tailcall]) st prefix
+        if (st.refill st) then (yy440 [@tailcall]) st prefix
+        else (yy439 [@tailcall]) st prefix
       ) else (
-        (yy419 [@tailcall]) st prefix
+        (yy439 [@tailcall]) st prefix
       )
 
-and yy421 (st : tokenizer_state) (prefix : string) : token =
+and yy441 (st : tokenizer_state) (prefix : string) : token =
   QUOTED_STRING (Buffer.contents st.info.strbuf)
 
-and yy422 (st : tokenizer_state) (prefix : string) : token =
+and yy442 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -6712,194 +7092,194 @@ and yy422 (st : tokenizer_state) (prefix : string) : token =
     | 'o'..'q'
     | 'v'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy422 [@tailcall]) st prefix
-        else (yy417 [@tailcall]) st prefix
+        if (st.refill st) then (yy442 [@tailcall]) st prefix
+        else (yy437 [@tailcall]) st prefix
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy435 [@tailcall]) st prefix
+        (yy455 [@tailcall]) st prefix
       )
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
+      (yy457 [@tailcall]) st prefix
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy439 [@tailcall]) st prefix
+      (yy459 [@tailcall]) st prefix
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy441 [@tailcall]) st prefix
+      (yy461 [@tailcall]) st prefix
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy442 [@tailcall]) st prefix
+      (yy462 [@tailcall]) st prefix
     | '\\' ->
       st.yycursor <- st.yycursor + 1;
-      (yy443 [@tailcall]) st prefix
+      (yy463 [@tailcall]) st prefix
     | 'b' ->
       st.yycursor <- st.yycursor + 1;
-      (yy444 [@tailcall]) st prefix
+      (yy464 [@tailcall]) st prefix
     | 'f' ->
       st.yycursor <- st.yycursor + 1;
-      (yy445 [@tailcall]) st prefix
+      (yy465 [@tailcall]) st prefix
     | 'n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy446 [@tailcall]) st prefix
+      (yy466 [@tailcall]) st prefix
     | 'r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy447 [@tailcall]) st prefix
+      (yy467 [@tailcall]) st prefix
     | 's' ->
       st.yycursor <- st.yycursor + 1;
-      (yy448 [@tailcall]) st prefix
+      (yy468 [@tailcall]) st prefix
     | 't' ->
       st.yycursor <- st.yycursor + 1;
-      (yy449 [@tailcall]) st prefix
+      (yy469 [@tailcall]) st prefix
     | 'u' ->
       st.yycursor <- st.yycursor + 1;
-      (yy450 [@tailcall]) st prefix
+      (yy470 [@tailcall]) st prefix
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy451 [@tailcall]) st prefix
+      (yy471 [@tailcall]) st prefix
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy453 [@tailcall]) st prefix
+      (yy473 [@tailcall]) st prefix
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy454 [@tailcall]) st prefix
+      (yy474 [@tailcall]) st prefix
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy455 [@tailcall]) st prefix
+      (yy475 [@tailcall]) st prefix
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy456 [@tailcall]) st prefix
+      (yy476 [@tailcall]) st prefix
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy457 [@tailcall]) st prefix
+      (yy477 [@tailcall]) st prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy458 [@tailcall]) st prefix
+      (yy478 [@tailcall]) st prefix
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy459 [@tailcall]) st prefix
+      (yy479 [@tailcall]) st prefix
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy460 [@tailcall]) st prefix
+      (yy480 [@tailcall]) st prefix
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy461 [@tailcall]) st prefix
+      (yy481 [@tailcall]) st prefix
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy462 [@tailcall]) st prefix
-    | _ -> (yy417 [@tailcall]) st prefix
+      (yy482 [@tailcall]) st prefix
+    | _ -> (yy437 [@tailcall]) st prefix
 
-and yy423 (st : tokenizer_state) (prefix : string) : token =
-  (yy424 [@tailcall]) st prefix
+and yy443 (st : tokenizer_state) (prefix : string) : token =
+  (yy444 [@tailcall]) st prefix
 
-and yy424 (st : tokenizer_state) (prefix : string) : token =
+and yy444 (st : tokenizer_state) (prefix : string) : token =
   malformed_utf8 st
 
-and yy425 (st : tokenizer_state) (prefix : string) : token =
+and yy445 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy416 [@tailcall]) st prefix
+      (yy436 [@tailcall]) st prefix
     | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy418 [@tailcall]) st prefix
+      (yy438 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy425 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy445 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy426 (st : tokenizer_state) (prefix : string) : token =
+and yy446 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy416 [@tailcall]) st prefix
+      (yy436 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy426 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy446 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy427 (st : tokenizer_state) (prefix : string) : token =
+and yy447 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy463 [@tailcall]) st prefix
+      (yy483 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy427 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy447 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy428 (st : tokenizer_state) (prefix : string) : token =
+and yy448 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy463 [@tailcall]) st prefix
+      (yy483 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy428 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy448 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy429 (st : tokenizer_state) (prefix : string) : token =
+and yy449 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy464 [@tailcall]) st prefix
+      (yy484 [@tailcall]) st prefix
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy465 [@tailcall]) st prefix
+      (yy485 [@tailcall]) st prefix
     | '\x82'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy463 [@tailcall]) st prefix
+      (yy483 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy429 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy449 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy430 (st : tokenizer_state) (prefix : string) : token =
+and yy450 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy463 [@tailcall]) st prefix
+      (yy483 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy430 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy450 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy431 (st : tokenizer_state) (prefix : string) : token =
+and yy451 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -6907,73 +7287,73 @@ and yy431 (st : tokenizer_state) (prefix : string) : token =
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy463 [@tailcall]) st prefix
+      (yy483 [@tailcall]) st prefix
     | '\xBB' ->
       st.yycursor <- st.yycursor + 1;
-      (yy466 [@tailcall]) st prefix
+      (yy486 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy431 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy451 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy432 (st : tokenizer_state) (prefix : string) : token =
+and yy452 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy467 [@tailcall]) st prefix
+      (yy487 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy432 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy452 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy433 (st : tokenizer_state) (prefix : string) : token =
+and yy453 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy467 [@tailcall]) st prefix
+      (yy487 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy433 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy453 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy434 (st : tokenizer_state) (prefix : string) : token =
+and yy454 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy467 [@tailcall]) st prefix
+      (yy487 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy434 [@tailcall]) st prefix
-        else (yy424 [@tailcall]) st prefix
+        if (st.refill st) then (yy454 [@tailcall]) st prefix
+        else (yy444 [@tailcall]) st prefix
       ) else (
-        (yy424 [@tailcall]) st prefix
+        (yy444 [@tailcall]) st prefix
       )
 
-and yy435 (st : tokenizer_state) (prefix : string) : token =
-  (yy436 [@tailcall]) st prefix
+and yy455 (st : tokenizer_state) (prefix : string) : token =
+  (yy456 [@tailcall]) st prefix
 
-and yy436 (st : tokenizer_state) (prefix : string) : token =
+and yy456 (st : tokenizer_state) (prefix : string) : token =
   error st "Invalid escape sequence"
 
-and yy437 (st : tokenizer_state) (prefix : string) : token =
+and yy457 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -6981,495 +7361,168 @@ and yy437 (st : tokenizer_state) (prefix : string) : token =
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
+      (yy457 [@tailcall]) st prefix
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy468 [@tailcall]) st prefix
+      (yy488 [@tailcall]) st prefix
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy469 [@tailcall]) st prefix
+      (yy489 [@tailcall]) st prefix
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy470 [@tailcall]) st prefix
+      (yy490 [@tailcall]) st prefix
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy471 [@tailcall]) st prefix
+      (yy491 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy437 [@tailcall]) st prefix
-        else (yy438 [@tailcall]) st prefix
+        if (st.refill st) then (yy457 [@tailcall]) st prefix
+        else (yy458 [@tailcall]) st prefix
       ) else (
-        (yy438 [@tailcall]) st prefix
+        (yy458 [@tailcall]) st prefix
       )
 
-and yy438 (st : tokenizer_state) (prefix : string) : token =
+and yy458 (st : tokenizer_state) (prefix : string) : token =
   whitespace_escape st; string st prefix
 
-and yy439 (st : tokenizer_state) (prefix : string) : token =
-  (yy440 [@tailcall]) st prefix
+and yy459 (st : tokenizer_state) (prefix : string) : token =
+  (yy460 [@tailcall]) st prefix
 
-and yy440 (st : tokenizer_state) (prefix : string) : token =
+and yy460 (st : tokenizer_state) (prefix : string) : token =
   
     newline st;
     whitespace_escape st;
     string st prefix
 
 
-and yy441 (st : tokenizer_state) (prefix : string) : token =
+and yy461 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy439 [@tailcall]) st prefix
+      (yy459 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy441 [@tailcall]) st prefix
-        else (yy440 [@tailcall]) st prefix
+        if (st.refill st) then (yy461 [@tailcall]) st prefix
+        else (yy460 [@tailcall]) st prefix
       ) else (
-        (yy440 [@tailcall]) st prefix
+        (yy460 [@tailcall]) st prefix
       )
 
-and yy442 (st : tokenizer_state) (prefix : string) : token =
+and yy462 (st : tokenizer_state) (prefix : string) : token =
   Buffer.add_char st.info.strbuf '"'; string st prefix
 
-and yy443 (st : tokenizer_state) (prefix : string) : token =
+and yy463 (st : tokenizer_state) (prefix : string) : token =
   Buffer.add_char st.info.strbuf '\\'; string st prefix
 
-and yy444 (st : tokenizer_state) (prefix : string) : token =
+and yy464 (st : tokenizer_state) (prefix : string) : token =
   Buffer.add_char st.info.strbuf '\b'; string st prefix
 
-and yy445 (st : tokenizer_state) (prefix : string) : token =
+and yy465 (st : tokenizer_state) (prefix : string) : token =
   Buffer.add_char st.info.strbuf '\012'; string st prefix
 
-and yy446 (st : tokenizer_state) (prefix : string) : token =
+and yy466 (st : tokenizer_state) (prefix : string) : token =
   Buffer.add_char st.info.strbuf '\n'; string st prefix
 
-and yy447 (st : tokenizer_state) (prefix : string) : token =
+and yy467 (st : tokenizer_state) (prefix : string) : token =
   Buffer.add_char st.info.strbuf '\r'; string st prefix
 
-and yy448 (st : tokenizer_state) (prefix : string) : token =
+and yy468 (st : tokenizer_state) (prefix : string) : token =
   Buffer.add_char st.info.strbuf ' '; string st prefix
 
-and yy449 (st : tokenizer_state) (prefix : string) : token =
+and yy469 (st : tokenizer_state) (prefix : string) : token =
   Buffer.add_char st.info.strbuf '\t'; string st prefix
 
-and yy450 (st : tokenizer_state) (prefix : string) : token =
+and yy470 (st : tokenizer_state) (prefix : string) : token =
   st.yyaccept <- 3;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '{' ->
       st.yycursor <- st.yycursor + 1;
-      (yy472 [@tailcall]) st prefix
+      (yy492 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy450 [@tailcall]) st prefix
-        else (yy436 [@tailcall]) st prefix
+        if (st.refill st) then (yy470 [@tailcall]) st prefix
+        else (yy456 [@tailcall]) st prefix
       ) else (
-        (yy436 [@tailcall]) st prefix
+        (yy456 [@tailcall]) st prefix
       )
 
-and yy451 (st : tokenizer_state) (prefix : string) : token =
+and yy471 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy435 [@tailcall]) st prefix
+      (yy455 [@tailcall]) st prefix
     | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy439 [@tailcall]) st prefix
+      (yy459 [@tailcall]) st prefix
     | '\xA0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy451 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy452 (st : tokenizer_state) (prefix : string) : token =
-  st.yycursor <- st.yymarker;
-  match st.yyaccept with
-    | 0 -> (yy417 [@tailcall]) st prefix
-    | 1 -> (yy424 [@tailcall]) st prefix
-    | 2 -> (yy438 [@tailcall]) st prefix
-    | _ -> (yy436 [@tailcall]) st prefix
-
-and yy453 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy435 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy453 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy454 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy453 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy454 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy455 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x99'
-    | '\x9B'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy453 [@tailcall]) st prefix
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy473 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy455 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy456 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy474 [@tailcall]) st prefix
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy475 [@tailcall]) st prefix
-    | '\x82'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy453 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy456 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy457 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy473 [@tailcall]) st prefix
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy453 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy457 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy458 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy453 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy458 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy459 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy453 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy459 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy460 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy458 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy460 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy461 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy458 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy461 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy462 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy458 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy462 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy463 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy416 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy463 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy464 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8D'
-    | '\x90'..'\xA7'
-    | '\xAF'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy416 [@tailcall]) st prefix
-    | '\x8E'..'\x8F'
-    | '\xAA'..'\xAE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy415 [@tailcall]) st prefix
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy418 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy464 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy465 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xA5'
-    | '\xAA'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy416 [@tailcall]) st prefix
-    | '\xA6'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy415 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy465 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy466 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy416 [@tailcall]) st prefix
-    | '\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy415 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy466 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy467 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy463 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy467 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy468 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy468 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy469 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy476 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy469 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy470 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy477 [@tailcall]) st prefix
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy478 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy470 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
-
-and yy471 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy476 [@tailcall]) st prefix
+      (yy457 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy471 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
       ) else (
-        (yy452 [@tailcall]) st prefix
+        (yy472 [@tailcall]) st prefix
       )
 
 and yy472 (st : tokenizer_state) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '0'..'9'
-    | 'A'..'F'
-    | 'a'..'f' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy479 [@tailcall]) st prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy472 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
-      ) else (
-        (yy452 [@tailcall]) st prefix
-      )
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy437 [@tailcall]) st prefix
+    | 1 -> (yy444 [@tailcall]) st prefix
+    | 2 -> (yy458 [@tailcall]) st prefix
+    | _ -> (yy456 [@tailcall]) st prefix
 
 and yy473 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy435 [@tailcall]) st prefix
+      (yy455 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy473 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
       ) else (
-        (yy452 [@tailcall]) st prefix
+        (yy472 [@tailcall]) st prefix
       )
 
 and yy474 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
+    | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
-    | '\x8B'..'\xA7'
-    | '\xAA'..'\xAE'
-    | '\xB0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy435 [@tailcall]) st prefix
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy439 [@tailcall]) st prefix
+      (yy473 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy474 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
       ) else (
-        (yy452 [@tailcall]) st prefix
+        (yy472 [@tailcall]) st prefix
       )
 
 and yy475 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x9E'
-    | '\xA0'..'\xBF' ->
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy435 [@tailcall]) st prefix
-    | '\x9F' ->
+      (yy473 [@tailcall]) st prefix
+    | '\x9A' ->
       st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
+      (yy493 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy475 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
       ) else (
-        (yy452 [@tailcall]) st prefix
+        (yy472 [@tailcall]) st prefix
       )
 
 and yy476 (st : tokenizer_state) (prefix : string) : token =
@@ -7477,64 +7530,391 @@ and yy476 (st : tokenizer_state) (prefix : string) : token =
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
+      (yy494 [@tailcall]) st prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy495 [@tailcall]) st prefix
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy473 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy476 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
       ) else (
-        (yy452 [@tailcall]) st prefix
+        (yy472 [@tailcall]) st prefix
       )
 
 and yy477 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
+      (yy493 [@tailcall]) st prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy473 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy477 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
       ) else (
-        (yy452 [@tailcall]) st prefix
+        (yy472 [@tailcall]) st prefix
       )
 
 and yy478 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x9F' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy437 [@tailcall]) st prefix
+      (yy473 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy478 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
       ) else (
-        (yy452 [@tailcall]) st prefix
+        (yy472 [@tailcall]) st prefix
       )
 
 and yy479 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy473 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy479 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy480 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy478 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy480 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy481 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy478 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy481 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy482 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy478 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy482 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy483 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy436 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy483 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy484 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xAF'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy436 [@tailcall]) st prefix
+    | '\x8E'..'\x8F'
+    | '\xAA'..'\xAE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy435 [@tailcall]) st prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy438 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy484 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy485 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xA5'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy436 [@tailcall]) st prefix
+    | '\xA6'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy435 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy485 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy486 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy436 [@tailcall]) st prefix
+    | '\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy435 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy486 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy487 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy483 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy487 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy488 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy457 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy488 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy489 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy496 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy489 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy490 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy497 [@tailcall]) st prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy498 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy490 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy491 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy496 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy491 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy492 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '0'..'9'
+    | 'A'..'F'
+    | 'a'..'f' ->
+      st.yyt1 <- st.yycursor;
+      st.yycursor <- st.yycursor + 1;
+      (yy499 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy492 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy493 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy457 [@tailcall]) st prefix
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy455 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy493 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy494 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy457 [@tailcall]) st prefix
+    | '\x8B'..'\xA7'
+    | '\xAA'..'\xAE'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy455 [@tailcall]) st prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy459 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy494 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy495 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy455 [@tailcall]) st prefix
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy457 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy495 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy496 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy457 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy496 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy497 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy457 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy497 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy498 (st : tokenizer_state) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy457 [@tailcall]) st prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy498 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
+      ) else (
+        (yy472 [@tailcall]) st prefix
+      )
+
+and yy499 (st : tokenizer_state) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '0'..'9'
     | 'A'..'F'
     | 'a'..'f' ->
       st.yycursor <- st.yycursor + 1;
-      (yy479 [@tailcall]) st prefix
+      (yy499 [@tailcall]) st prefix
     | '}' ->
       st.yycursor <- st.yycursor + 1;
-      (yy480 [@tailcall]) st prefix
+      (yy500 [@tailcall]) st prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy479 [@tailcall]) st prefix
-        else (yy452 [@tailcall]) st prefix
+        if (st.refill st) then (yy499 [@tailcall]) st prefix
+        else (yy472 [@tailcall]) st prefix
       ) else (
-        (yy452 [@tailcall]) st prefix
+        (yy472 [@tailcall]) st prefix
       )
 
-and yy480 (st : tokenizer_state) (prefix : string) : token =
+and yy500 (st : tokenizer_state) (prefix : string) : token =
   st.t1 <- st.yyt1;
   st.t2 <- st.yycursor;
   st.t2 <- st.t2 - 1;
@@ -7550,19 +7930,19 @@ and yy480 (st : tokenizer_state) (prefix : string) : token =
     string st prefix
 
 
-and yy481 (st : tokenizer_state) (prefix : string) : token =
+and yy501 (st : tokenizer_state) (prefix : string) : token =
   error st "Unterminated string"
 
 and yyfnsingle (st : tokenizer_state) (prefix : string) : token =
-  (yy413 [@tailcall]) st prefix
+  (yy433 [@tailcall]) st prefix
 
-and yy321 (st : tokenizer_state) (prefix : string) : token =
+and yy341 (st : tokenizer_state) (prefix : string) : token =
   match st.yycond with
     | YYC_multi -> (yyfnmulti [@tailcall]) st prefix
     | YYC_single -> (yyfnsingle [@tailcall]) st prefix
 
 and string (st : tokenizer_state) (prefix : string) : token =
-  (yy321 [@tailcall]) st prefix
+  (yy341 [@tailcall]) st prefix
 
 
 
@@ -7585,11 +7965,11 @@ let check_hashlen st exp_hashlen =
     true
 
 
-let rec yy483 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+let rec yy503 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   save_start_position st;
-  (yy484 [@tailcall]) st exp_hashlen prefix
+  (yy504 [@tailcall]) st exp_hashlen prefix
 
-and yy484 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy504 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -7597,72 +7977,72 @@ and yy484 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy484 [@tailcall]) st exp_hashlen prefix
-        else (yy534 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy504 [@tailcall]) st exp_hashlen prefix
+        else (yy554 [@tailcall]) st exp_hashlen prefix
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy485 [@tailcall]) st exp_hashlen prefix
+        (yy505 [@tailcall]) st exp_hashlen prefix
       )
     | '\t'
     | ' '..'!'
     | '#'..'~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy486 [@tailcall]) st exp_hashlen prefix
+      (yy506 [@tailcall]) st exp_hashlen prefix
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy488 [@tailcall]) st exp_hashlen prefix
+      (yy508 [@tailcall]) st exp_hashlen prefix
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy490 [@tailcall]) st exp_hashlen prefix
+      (yy510 [@tailcall]) st exp_hashlen prefix
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy491 [@tailcall]) st exp_hashlen prefix
+      (yy511 [@tailcall]) st exp_hashlen prefix
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy494 [@tailcall]) st exp_hashlen prefix
+      (yy514 [@tailcall]) st exp_hashlen prefix
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy495 [@tailcall]) st exp_hashlen prefix
+      (yy515 [@tailcall]) st exp_hashlen prefix
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy496 [@tailcall]) st exp_hashlen prefix
+      (yy516 [@tailcall]) st exp_hashlen prefix
     | '\xE1'
     | '\xE3'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy497 [@tailcall]) st exp_hashlen prefix
+      (yy517 [@tailcall]) st exp_hashlen prefix
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy498 [@tailcall]) st exp_hashlen prefix
+      (yy518 [@tailcall]) st exp_hashlen prefix
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy499 [@tailcall]) st exp_hashlen prefix
+      (yy519 [@tailcall]) st exp_hashlen prefix
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy500 [@tailcall]) st exp_hashlen prefix
+      (yy520 [@tailcall]) st exp_hashlen prefix
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy501 [@tailcall]) st exp_hashlen prefix
+      (yy521 [@tailcall]) st exp_hashlen prefix
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy502 [@tailcall]) st exp_hashlen prefix
+      (yy522 [@tailcall]) st exp_hashlen prefix
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy503 [@tailcall]) st exp_hashlen prefix
+      (yy523 [@tailcall]) st exp_hashlen prefix
     | _ ->
       st.yycursor <- st.yycursor + 1;
-      (yy492 [@tailcall]) st exp_hashlen prefix
+      (yy512 [@tailcall]) st exp_hashlen prefix
 
-and yy485 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy505 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   error st "Illegal character"
 
-and yy486 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  (yy487 [@tailcall]) st exp_hashlen prefix
+and yy506 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy507 [@tailcall]) st exp_hashlen prefix
 
-and yy487 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy507 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   add_lexeme_to_buf st st.info.strbuf; yyfnrmulti st exp_hashlen prefix
 
-and yy488 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy508 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -7672,91 +8052,91 @@ and yy488 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '!'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy488 [@tailcall]) st exp_hashlen prefix
-        else (yy489 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy508 [@tailcall]) st exp_hashlen prefix
+        else (yy509 [@tailcall]) st exp_hashlen prefix
       ) else (
         st.yyt1 <- st.yycursor;
         st.yyt2 <- st.yycursor;
         st.yycursor <- st.yycursor + 1;
-        (yy504 [@tailcall]) st exp_hashlen prefix
+        (yy524 [@tailcall]) st exp_hashlen prefix
       )
     | '\t'
     | ' ' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy505 [@tailcall]) st exp_hashlen prefix
+      (yy525 [@tailcall]) st exp_hashlen prefix
     | '\n'..'\x0C' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy507 [@tailcall]) st exp_hashlen prefix
+      (yy527 [@tailcall]) st exp_hashlen prefix
     | '\r' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy509 [@tailcall]) st exp_hashlen prefix
+      (yy529 [@tailcall]) st exp_hashlen prefix
     | '\xC2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy510 [@tailcall]) st exp_hashlen prefix
+      (yy530 [@tailcall]) st exp_hashlen prefix
     | '\xC3'..'\xDF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | '\xE0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy512 [@tailcall]) st exp_hashlen prefix
+      (yy532 [@tailcall]) st exp_hashlen prefix
     | '\xE1' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy513 [@tailcall]) st exp_hashlen prefix
+      (yy533 [@tailcall]) st exp_hashlen prefix
     | '\xE2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy514 [@tailcall]) st exp_hashlen prefix
+      (yy534 [@tailcall]) st exp_hashlen prefix
     | '\xE3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy515 [@tailcall]) st exp_hashlen prefix
+      (yy535 [@tailcall]) st exp_hashlen prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy516 [@tailcall]) st exp_hashlen prefix
+      (yy536 [@tailcall]) st exp_hashlen prefix
     | '\xED' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy517 [@tailcall]) st exp_hashlen prefix
+      (yy537 [@tailcall]) st exp_hashlen prefix
     | '\xF0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy518 [@tailcall]) st exp_hashlen prefix
+      (yy538 [@tailcall]) st exp_hashlen prefix
     | '\xF1'..'\xF3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy519 [@tailcall]) st exp_hashlen prefix
+      (yy539 [@tailcall]) st exp_hashlen prefix
     | '\xF4' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy520 [@tailcall]) st exp_hashlen prefix
-    | _ -> (yy489 [@tailcall]) st exp_hashlen prefix
+      (yy540 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy509 [@tailcall]) st exp_hashlen prefix
 
-and yy489 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy509 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   newline st; yyfnrmulti st exp_hashlen prefix
 
-and yy490 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy510 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -7766,217 +8146,217 @@ and yy490 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '!'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy490 [@tailcall]) st exp_hashlen prefix
-        else (yy489 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy510 [@tailcall]) st exp_hashlen prefix
+        else (yy509 [@tailcall]) st exp_hashlen prefix
       ) else (
         st.yyt1 <- st.yycursor;
         st.yyt2 <- st.yycursor;
         st.yycursor <- st.yycursor + 1;
-        (yy504 [@tailcall]) st exp_hashlen prefix
+        (yy524 [@tailcall]) st exp_hashlen prefix
       )
     | '\t'
     | ' ' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy505 [@tailcall]) st exp_hashlen prefix
+      (yy525 [@tailcall]) st exp_hashlen prefix
     | '\n' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy521 [@tailcall]) st exp_hashlen prefix
+      (yy541 [@tailcall]) st exp_hashlen prefix
     | '\x0B'..'\x0C' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy507 [@tailcall]) st exp_hashlen prefix
+      (yy527 [@tailcall]) st exp_hashlen prefix
     | '\r' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy509 [@tailcall]) st exp_hashlen prefix
+      (yy529 [@tailcall]) st exp_hashlen prefix
     | '\xC2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy510 [@tailcall]) st exp_hashlen prefix
+      (yy530 [@tailcall]) st exp_hashlen prefix
     | '\xC3'..'\xDF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | '\xE0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy512 [@tailcall]) st exp_hashlen prefix
+      (yy532 [@tailcall]) st exp_hashlen prefix
     | '\xE1' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy513 [@tailcall]) st exp_hashlen prefix
+      (yy533 [@tailcall]) st exp_hashlen prefix
     | '\xE2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy514 [@tailcall]) st exp_hashlen prefix
+      (yy534 [@tailcall]) st exp_hashlen prefix
     | '\xE3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy515 [@tailcall]) st exp_hashlen prefix
+      (yy535 [@tailcall]) st exp_hashlen prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy516 [@tailcall]) st exp_hashlen prefix
+      (yy536 [@tailcall]) st exp_hashlen prefix
     | '\xED' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy517 [@tailcall]) st exp_hashlen prefix
+      (yy537 [@tailcall]) st exp_hashlen prefix
     | '\xF0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy518 [@tailcall]) st exp_hashlen prefix
+      (yy538 [@tailcall]) st exp_hashlen prefix
     | '\xF1'..'\xF3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy519 [@tailcall]) st exp_hashlen prefix
+      (yy539 [@tailcall]) st exp_hashlen prefix
     | '\xF4' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy520 [@tailcall]) st exp_hashlen prefix
-    | _ -> (yy489 [@tailcall]) st exp_hashlen prefix
+      (yy540 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy509 [@tailcall]) st exp_hashlen prefix
 
-and yy491 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy511 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy522 [@tailcall]) st exp_hashlen prefix
+      (yy542 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy491 [@tailcall]) st exp_hashlen prefix
-        else (yy487 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy511 [@tailcall]) st exp_hashlen prefix
+        else (yy507 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy487 [@tailcall]) st exp_hashlen prefix
+        (yy507 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy492 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  (yy493 [@tailcall]) st exp_hashlen prefix
+and yy512 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy513 [@tailcall]) st exp_hashlen prefix
 
-and yy493 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy513 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   malformed_utf8 st
 
-and yy494 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy514 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy486 [@tailcall]) st exp_hashlen prefix
+      (yy506 [@tailcall]) st exp_hashlen prefix
     | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy488 [@tailcall]) st exp_hashlen prefix
+      (yy508 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy494 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy514 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy495 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy515 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy486 [@tailcall]) st exp_hashlen prefix
+      (yy506 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy495 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy515 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy496 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy516 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy523 [@tailcall]) st exp_hashlen prefix
+      (yy543 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy496 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy516 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy497 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy517 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy523 [@tailcall]) st exp_hashlen prefix
+      (yy543 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy497 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy517 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy498 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy518 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy524 [@tailcall]) st exp_hashlen prefix
+      (yy544 [@tailcall]) st exp_hashlen prefix
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy525 [@tailcall]) st exp_hashlen prefix
+      (yy545 [@tailcall]) st exp_hashlen prefix
     | '\x82'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy523 [@tailcall]) st exp_hashlen prefix
+      (yy543 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy498 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy518 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy499 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy519 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy523 [@tailcall]) st exp_hashlen prefix
+      (yy543 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy499 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy519 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy500 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy520 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -7984,67 +8364,67 @@ and yy500 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy523 [@tailcall]) st exp_hashlen prefix
+      (yy543 [@tailcall]) st exp_hashlen prefix
     | '\xBB' ->
       st.yycursor <- st.yycursor + 1;
-      (yy526 [@tailcall]) st exp_hashlen prefix
+      (yy546 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy500 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy520 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy501 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy521 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy527 [@tailcall]) st exp_hashlen prefix
+      (yy547 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy501 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy521 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy502 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy522 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy527 [@tailcall]) st exp_hashlen prefix
+      (yy547 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy502 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy522 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy503 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy523 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy527 [@tailcall]) st exp_hashlen prefix
+      (yy547 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy503 [@tailcall]) st exp_hashlen prefix
-        else (yy493 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy523 [@tailcall]) st exp_hashlen prefix
+        else (yy513 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy493 [@tailcall]) st exp_hashlen prefix
+        (yy513 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy504 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy524 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.t1 <- st.yyt1;
   st.t2 <- st.yyt2;
   st.yycursor <- st.yyt2;
@@ -8053,7 +8433,7 @@ and yy504 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
     yyfnrmulti st exp_hashlen prefix
 
 
-and yy505 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy525 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -8061,84 +8441,84 @@ and yy505 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '!'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy505 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy525 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
         st.yyt2 <- st.yycursor;
         st.yycursor <- st.yycursor + 1;
-        (yy504 [@tailcall]) st exp_hashlen prefix
+        (yy524 [@tailcall]) st exp_hashlen prefix
       )
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy505 [@tailcall]) st exp_hashlen prefix
+      (yy525 [@tailcall]) st exp_hashlen prefix
     | '\n'..'\x0C' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy507 [@tailcall]) st exp_hashlen prefix
+      (yy527 [@tailcall]) st exp_hashlen prefix
     | '\r' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy509 [@tailcall]) st exp_hashlen prefix
+      (yy529 [@tailcall]) st exp_hashlen prefix
     | '\xC2' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy510 [@tailcall]) st exp_hashlen prefix
+      (yy530 [@tailcall]) st exp_hashlen prefix
     | '\xC3'..'\xDF' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | '\xE0' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy512 [@tailcall]) st exp_hashlen prefix
+      (yy532 [@tailcall]) st exp_hashlen prefix
     | '\xE1' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy513 [@tailcall]) st exp_hashlen prefix
+      (yy533 [@tailcall]) st exp_hashlen prefix
     | '\xE2' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy514 [@tailcall]) st exp_hashlen prefix
+      (yy534 [@tailcall]) st exp_hashlen prefix
     | '\xE3' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy515 [@tailcall]) st exp_hashlen prefix
+      (yy535 [@tailcall]) st exp_hashlen prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy516 [@tailcall]) st exp_hashlen prefix
+      (yy536 [@tailcall]) st exp_hashlen prefix
     | '\xED' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy517 [@tailcall]) st exp_hashlen prefix
+      (yy537 [@tailcall]) st exp_hashlen prefix
     | '\xF0' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy518 [@tailcall]) st exp_hashlen prefix
+      (yy538 [@tailcall]) st exp_hashlen prefix
     | '\xF1'..'\xF3' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy519 [@tailcall]) st exp_hashlen prefix
+      (yy539 [@tailcall]) st exp_hashlen prefix
     | '\xF4' ->
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy520 [@tailcall]) st exp_hashlen prefix
-    | _ -> (yy506 [@tailcall]) st exp_hashlen prefix
+      (yy540 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy526 [@tailcall]) st exp_hashlen prefix
 
-and yy506 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy526 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yycursor <- st.yymarker;
   match st.yyaccept with
-    | 0 -> (yy489 [@tailcall]) st exp_hashlen prefix
-    | 1 -> (yy487 [@tailcall]) st exp_hashlen prefix
-    | 2 -> (yy493 [@tailcall]) st exp_hashlen prefix
-    | _ -> (yy508 [@tailcall]) st exp_hashlen prefix
+    | 0 -> (yy509 [@tailcall]) st exp_hashlen prefix
+    | 1 -> (yy507 [@tailcall]) st exp_hashlen prefix
+    | 2 -> (yy513 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy528 [@tailcall]) st exp_hashlen prefix
 
-and yy507 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  (yy508 [@tailcall]) st exp_hashlen prefix
+and yy527 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy528 [@tailcall]) st exp_hashlen prefix
 
-and yy508 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy528 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.t1 <- st.yyt1;
   st.yycursor <- st.yyt2;
   
@@ -8147,196 +8527,196 @@ and yy508 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
     yyfnrmulti st exp_hashlen prefix
 
 
-and yy509 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy529 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy507 [@tailcall]) st exp_hashlen prefix
+      (yy527 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy509 [@tailcall]) st exp_hashlen prefix
-        else (yy508 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy529 [@tailcall]) st exp_hashlen prefix
+        else (yy528 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy508 [@tailcall]) st exp_hashlen prefix
+        (yy528 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy510 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy530 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy504 [@tailcall]) st exp_hashlen prefix
+      (yy524 [@tailcall]) st exp_hashlen prefix
     | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy507 [@tailcall]) st exp_hashlen prefix
+      (yy527 [@tailcall]) st exp_hashlen prefix
     | '\xA0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy505 [@tailcall]) st exp_hashlen prefix
+      (yy525 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy510 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy530 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy511 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy531 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy504 [@tailcall]) st exp_hashlen prefix
+      (yy524 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy511 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy531 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy512 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy532 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy512 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy532 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy513 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy533 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | '\x9A' ->
       st.yycursor <- st.yycursor + 1;
-      (yy528 [@tailcall]) st exp_hashlen prefix
+      (yy548 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy513 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy533 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy514 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy534 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy529 [@tailcall]) st exp_hashlen prefix
+      (yy549 [@tailcall]) st exp_hashlen prefix
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy530 [@tailcall]) st exp_hashlen prefix
+      (yy550 [@tailcall]) st exp_hashlen prefix
     | '\x82'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy514 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy534 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy515 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy535 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy528 [@tailcall]) st exp_hashlen prefix
+      (yy548 [@tailcall]) st exp_hashlen prefix
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy515 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy535 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy516 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy536 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy516 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy536 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy517 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy537 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy517 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy537 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy518 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy538 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy516 [@tailcall]) st exp_hashlen prefix
+      (yy536 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy518 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy538 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy519 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy539 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy516 [@tailcall]) st exp_hashlen prefix
+      (yy536 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy519 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy539 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy520 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy540 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy516 [@tailcall]) st exp_hashlen prefix
+      (yy536 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy520 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy540 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy521 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy541 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.yyaccept <- 3;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -8346,422 +8726,171 @@ and yy521 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
     | '\x0E'..'\x1F'
     | '!'..'\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy521 [@tailcall]) st exp_hashlen prefix
-        else (yy508 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy541 [@tailcall]) st exp_hashlen prefix
+        else (yy528 [@tailcall]) st exp_hashlen prefix
       ) else (
         st.yyt1 <- st.yycursor;
         st.yyt2 <- st.yycursor;
         st.yycursor <- st.yycursor + 1;
-        (yy504 [@tailcall]) st exp_hashlen prefix
+        (yy524 [@tailcall]) st exp_hashlen prefix
       )
     | '\t'
     | ' ' ->
       st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy505 [@tailcall]) st exp_hashlen prefix
+      (yy525 [@tailcall]) st exp_hashlen prefix
     | '\n'..'\x0C' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy507 [@tailcall]) st exp_hashlen prefix
+      (yy527 [@tailcall]) st exp_hashlen prefix
     | '\r' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy509 [@tailcall]) st exp_hashlen prefix
+      (yy529 [@tailcall]) st exp_hashlen prefix
     | '\xC2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy510 [@tailcall]) st exp_hashlen prefix
+      (yy530 [@tailcall]) st exp_hashlen prefix
     | '\xC3'..'\xDF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy511 [@tailcall]) st exp_hashlen prefix
+      (yy531 [@tailcall]) st exp_hashlen prefix
     | '\xE0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy512 [@tailcall]) st exp_hashlen prefix
+      (yy532 [@tailcall]) st exp_hashlen prefix
     | '\xE1' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy513 [@tailcall]) st exp_hashlen prefix
+      (yy533 [@tailcall]) st exp_hashlen prefix
     | '\xE2' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy514 [@tailcall]) st exp_hashlen prefix
+      (yy534 [@tailcall]) st exp_hashlen prefix
     | '\xE3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy515 [@tailcall]) st exp_hashlen prefix
+      (yy535 [@tailcall]) st exp_hashlen prefix
     | '\xE4'..'\xEC'
     | '\xEE'..'\xEF' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy516 [@tailcall]) st exp_hashlen prefix
+      (yy536 [@tailcall]) st exp_hashlen prefix
     | '\xED' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy517 [@tailcall]) st exp_hashlen prefix
+      (yy537 [@tailcall]) st exp_hashlen prefix
     | '\xF0' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy518 [@tailcall]) st exp_hashlen prefix
+      (yy538 [@tailcall]) st exp_hashlen prefix
     | '\xF1'..'\xF3' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy519 [@tailcall]) st exp_hashlen prefix
+      (yy539 [@tailcall]) st exp_hashlen prefix
     | '\xF4' ->
       st.yyt1 <- st.yycursor;
       st.yyt2 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy520 [@tailcall]) st exp_hashlen prefix
-    | _ -> (yy508 [@tailcall]) st exp_hashlen prefix
+      (yy540 [@tailcall]) st exp_hashlen prefix
+    | _ -> (yy528 [@tailcall]) st exp_hashlen prefix
 
-and yy522 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy542 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy531 [@tailcall]) st exp_hashlen prefix
+      (yy551 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy522 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy542 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy523 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy543 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy486 [@tailcall]) st exp_hashlen prefix
+      (yy506 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy523 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy543 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy524 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy544 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8D'
     | '\x90'..'\xA7'
     | '\xAF'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy486 [@tailcall]) st exp_hashlen prefix
+      (yy506 [@tailcall]) st exp_hashlen prefix
     | '\x8E'..'\x8F'
     | '\xAA'..'\xAE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy485 [@tailcall]) st exp_hashlen prefix
+      (yy505 [@tailcall]) st exp_hashlen prefix
     | '\xA8'..'\xA9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy488 [@tailcall]) st exp_hashlen prefix
+      (yy508 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy524 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy544 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy525 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy545 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xA5'
     | '\xAA'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy486 [@tailcall]) st exp_hashlen prefix
+      (yy506 [@tailcall]) st exp_hashlen prefix
     | '\xA6'..'\xA9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy485 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy525 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy526 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy486 [@tailcall]) st exp_hashlen prefix
-    | '\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy485 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy526 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy527 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy523 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy527 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy528 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy505 [@tailcall]) st exp_hashlen prefix
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy504 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy528 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy529 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy505 [@tailcall]) st exp_hashlen prefix
-    | '\x8B'..'\xA7'
-    | '\xAA'..'\xAE'
-    | '\xB0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy504 [@tailcall]) st exp_hashlen prefix
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy507 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy529 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy530 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9E'
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy504 [@tailcall]) st exp_hashlen prefix
-    | '\x9F' ->
-      st.yycursor <- st.yycursor + 1;
       (yy505 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy530 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy545 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
-
-and yy531 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '#' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy532 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy531 [@tailcall]) st exp_hashlen prefix
-        else (yy506 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy506 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy532 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '#' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy532 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy532 [@tailcall]) st exp_hashlen prefix
-        else (yy533 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy533 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy533 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.t1 <- st.yyt1;
-  
-    if check_hashlen st exp_hashlen then begin
-      RAW_STRING (multiline_contents st.info.strbuf)
-    end else yyfnrmulti st exp_hashlen prefix
-
-
-and yy534 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  error st "Unterminated raw string"
-
-and yyfnrmulti (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  (yy483 [@tailcall]) st exp_hashlen prefix
-
-and yy535 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  save_start_position st;
-  (yy536 [@tailcall]) st exp_hashlen prefix
-
-and yy536 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x00'
-    | '\x01'..'\b'
-    | '\x0E'..'\x1F'
-    | '\x7F' ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy536 [@tailcall]) st exp_hashlen prefix
-        else (yy564 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        st.yycursor <- st.yycursor + 1;
-        (yy537 [@tailcall]) st exp_hashlen prefix
-      )
-    | '\t'
-    | ' '..'!'
-    | '#'..'~' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy538 [@tailcall]) st exp_hashlen prefix
-    | '\n'..'\x0C' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy540 [@tailcall]) st exp_hashlen prefix
-    | '\r' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy542 [@tailcall]) st exp_hashlen prefix
-    | '"' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy543 [@tailcall]) st exp_hashlen prefix
-    | '\xC2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy546 [@tailcall]) st exp_hashlen prefix
-    | '\xC3'..'\xDF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy547 [@tailcall]) st exp_hashlen prefix
-    | '\xE0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy548 [@tailcall]) st exp_hashlen prefix
-    | '\xE1'
-    | '\xE3'..'\xEC'
-    | '\xEE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy549 [@tailcall]) st exp_hashlen prefix
-    | '\xE2' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy550 [@tailcall]) st exp_hashlen prefix
-    | '\xED' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy551 [@tailcall]) st exp_hashlen prefix
-    | '\xEF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy552 [@tailcall]) st exp_hashlen prefix
-    | '\xF0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy553 [@tailcall]) st exp_hashlen prefix
-    | '\xF1'..'\xF3' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy554 [@tailcall]) st exp_hashlen prefix
-    | '\xF4' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy555 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      st.yycursor <- st.yycursor + 1;
-      (yy544 [@tailcall]) st exp_hashlen prefix
-
-and yy537 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  error st "Illegal character"
-
-and yy538 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  (yy539 [@tailcall]) st exp_hashlen prefix
-
-and yy539 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  add_lexeme_to_buf st st.info.strbuf; yyfnrsingle st exp_hashlen prefix
-
-and yy540 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  (yy541 [@tailcall]) st exp_hashlen prefix
-
-and yy541 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  newline st; error st "Unterminated raw string"
-
-and yy542 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\n' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy540 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy542 [@tailcall]) st exp_hashlen prefix
-        else (yy541 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy541 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy543 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '#' ->
-      st.yyt1 <- st.yycursor;
-      st.yycursor <- st.yycursor + 1;
-      (yy556 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy543 [@tailcall]) st exp_hashlen prefix
-        else (yy539 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy539 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy544 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  (yy545 [@tailcall]) st exp_hashlen prefix
-
-and yy545 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  malformed_utf8 st
 
 and yy546 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\xBF' ->
+    | '\x80'..'\xBE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy538 [@tailcall]) st exp_hashlen prefix
-    | '\x85' ->
+      (yy506 [@tailcall]) st exp_hashlen prefix
+    | '\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy540 [@tailcall]) st exp_hashlen prefix
+      (yy505 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy546 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
 and yy547 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
@@ -8769,249 +8898,220 @@ and yy547 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy538 [@tailcall]) st exp_hashlen prefix
+      (yy543 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy547 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
 and yy548 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy558 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy548 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy549 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy558 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy549 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy550 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy560 [@tailcall]) st exp_hashlen prefix
-    | '\x81' ->
+      (yy525 [@tailcall]) st exp_hashlen prefix
+    | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy561 [@tailcall]) st exp_hashlen prefix
-    | '\x82'..'\xBF' ->
+      (yy524 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy548 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy526 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy549 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8A'
+    | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy558 [@tailcall]) st exp_hashlen prefix
+      (yy525 [@tailcall]) st exp_hashlen prefix
+    | '\x8B'..'\xA7'
+    | '\xAA'..'\xAE'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy524 [@tailcall]) st exp_hashlen prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy527 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy549 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy526 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy550 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy524 [@tailcall]) st exp_hashlen prefix
+    | '\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy525 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy550 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
 and yy551 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x9F' ->
+    | '#' ->
+      st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy558 [@tailcall]) st exp_hashlen prefix
+      (yy552 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy551 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
+        else (yy526 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
+        (yy526 [@tailcall]) st exp_hashlen prefix
       )
 
 and yy552 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBA'
-    | '\xBC'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy558 [@tailcall]) st exp_hashlen prefix
-    | '\xBB' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy562 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy552 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy553 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy563 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy553 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy554 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy563 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy554 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy555 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy563 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy555 [@tailcall]) st exp_hashlen prefix
-        else (yy545 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy545 [@tailcall]) st exp_hashlen prefix
-      )
-
-and yy556 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '#' ->
       st.yycursor <- st.yycursor + 1;
-      (yy556 [@tailcall]) st exp_hashlen prefix
+      (yy552 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy556 [@tailcall]) st exp_hashlen prefix
-        else (yy557 [@tailcall]) st exp_hashlen prefix
+        if (st.refill st) then (yy552 [@tailcall]) st exp_hashlen prefix
+        else (yy553 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy557 [@tailcall]) st exp_hashlen prefix
+        (yy553 [@tailcall]) st exp_hashlen prefix
       )
 
-and yy557 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy553 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   st.t1 <- st.yyt1;
   
-    if check_hashlen st exp_hashlen then
-      RAW_STRING (Buffer.contents st.info.strbuf)
-    else yyfnrsingle st exp_hashlen prefix
+    if check_hashlen st exp_hashlen then begin
+      RAW_STRING (multiline_contents st.info.strbuf)
+    end else yyfnrmulti st exp_hashlen prefix
 
+
+and yy554 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  error st "Unterminated raw string"
+
+and yyfnrmulti (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy503 [@tailcall]) st exp_hashlen prefix
+
+and yy555 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  save_start_position st;
+  (yy556 [@tailcall]) st exp_hashlen prefix
+
+and yy556 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x00'
+    | '\x01'..'\b'
+    | '\x0E'..'\x1F'
+    | '\x7F' ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy556 [@tailcall]) st exp_hashlen prefix
+        else (yy584 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        st.yycursor <- st.yycursor + 1;
+        (yy557 [@tailcall]) st exp_hashlen prefix
+      )
+    | '\t'
+    | ' '..'!'
+    | '#'..'~' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy558 [@tailcall]) st exp_hashlen prefix
+    | '\n'..'\x0C' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy560 [@tailcall]) st exp_hashlen prefix
+    | '\r' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy562 [@tailcall]) st exp_hashlen prefix
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy563 [@tailcall]) st exp_hashlen prefix
+    | '\xC2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy566 [@tailcall]) st exp_hashlen prefix
+    | '\xC3'..'\xDF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy567 [@tailcall]) st exp_hashlen prefix
+    | '\xE0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy568 [@tailcall]) st exp_hashlen prefix
+    | '\xE1'
+    | '\xE3'..'\xEC'
+    | '\xEE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy569 [@tailcall]) st exp_hashlen prefix
+    | '\xE2' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy570 [@tailcall]) st exp_hashlen prefix
+    | '\xED' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy571 [@tailcall]) st exp_hashlen prefix
+    | '\xEF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy572 [@tailcall]) st exp_hashlen prefix
+    | '\xF0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy573 [@tailcall]) st exp_hashlen prefix
+    | '\xF1'..'\xF3' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy574 [@tailcall]) st exp_hashlen prefix
+    | '\xF4' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy575 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      st.yycursor <- st.yycursor + 1;
+      (yy564 [@tailcall]) st exp_hashlen prefix
+
+and yy557 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  error st "Illegal character"
 
 and yy558 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy538 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy558 [@tailcall]) st exp_hashlen prefix
-        else (yy559 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy559 [@tailcall]) st exp_hashlen prefix
-      )
+  (yy559 [@tailcall]) st exp_hashlen prefix
 
 and yy559 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  st.yycursor <- st.yymarker;
-  (yy545 [@tailcall]) st exp_hashlen prefix
+  add_lexeme_to_buf st st.info.strbuf; yyfnrsingle st exp_hashlen prefix
 
 and yy560 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8D'
-    | '\x90'..'\xA7'
-    | '\xAF'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy538 [@tailcall]) st exp_hashlen prefix
-    | '\x8E'..'\x8F'
-    | '\xAA'..'\xAE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy537 [@tailcall]) st exp_hashlen prefix
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy540 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy560 [@tailcall]) st exp_hashlen prefix
-        else (yy559 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy559 [@tailcall]) st exp_hashlen prefix
-      )
+  (yy561 [@tailcall]) st exp_hashlen prefix
 
 and yy561 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xA5'
-    | '\xAA'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy538 [@tailcall]) st exp_hashlen prefix
-    | '\xA6'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy537 [@tailcall]) st exp_hashlen prefix
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy561 [@tailcall]) st exp_hashlen prefix
-        else (yy559 [@tailcall]) st exp_hashlen prefix
-      ) else (
-        (yy559 [@tailcall]) st exp_hashlen prefix
-      )
+  newline st; error st "Unterminated raw string"
 
 and yy562 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBE' ->
+    | '\n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy538 [@tailcall]) st exp_hashlen prefix
-    | '\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy537 [@tailcall]) st exp_hashlen prefix
+      (yy560 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy562 [@tailcall]) st exp_hashlen prefix
-        else (yy559 [@tailcall]) st exp_hashlen prefix
+        else (yy561 [@tailcall]) st exp_hashlen prefix
       ) else (
-        (yy559 [@tailcall]) st exp_hashlen prefix
+        (yy561 [@tailcall]) st exp_hashlen prefix
       )
 
 and yy563 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBF' ->
+    | '#' ->
+      st.yyt1 <- st.yycursor;
       st.yycursor <- st.yycursor + 1;
-      (yy558 [@tailcall]) st exp_hashlen prefix
+      (yy576 [@tailcall]) st exp_hashlen prefix
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy563 [@tailcall]) st exp_hashlen prefix
@@ -9021,18 +9121,298 @@ and yy563 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
       )
 
 and yy564 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  (yy565 [@tailcall]) st exp_hashlen prefix
+
+and yy565 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  malformed_utf8 st
+
+and yy566 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy558 [@tailcall]) st exp_hashlen prefix
+    | '\x85' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy560 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy566 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy567 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy558 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy567 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy568 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy578 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy568 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy569 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy578 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy569 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy570 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy580 [@tailcall]) st exp_hashlen prefix
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy581 [@tailcall]) st exp_hashlen prefix
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy578 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy570 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy571 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy578 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy571 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy572 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBA'
+    | '\xBC'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy578 [@tailcall]) st exp_hashlen prefix
+    | '\xBB' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy582 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy572 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy573 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy583 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy573 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy574 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy583 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy574 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy575 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy583 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy575 [@tailcall]) st exp_hashlen prefix
+        else (yy565 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy565 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy576 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '#' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy576 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy576 [@tailcall]) st exp_hashlen prefix
+        else (yy577 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy577 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy577 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.t1 <- st.yyt1;
+  
+    if check_hashlen st exp_hashlen then
+      RAW_STRING (Buffer.contents st.info.strbuf)
+    else yyfnrsingle st exp_hashlen prefix
+
+
+and yy578 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy558 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy578 [@tailcall]) st exp_hashlen prefix
+        else (yy579 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy579 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy579 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  st.yycursor <- st.yymarker;
+  (yy565 [@tailcall]) st exp_hashlen prefix
+
+and yy580 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xAF'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy558 [@tailcall]) st exp_hashlen prefix
+    | '\x8E'..'\x8F'
+    | '\xAA'..'\xAE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy557 [@tailcall]) st exp_hashlen prefix
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy560 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy580 [@tailcall]) st exp_hashlen prefix
+        else (yy579 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy579 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy581 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xA5'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy558 [@tailcall]) st exp_hashlen prefix
+    | '\xA6'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy557 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy581 [@tailcall]) st exp_hashlen prefix
+        else (yy579 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy579 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy582 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy558 [@tailcall]) st exp_hashlen prefix
+    | '\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy557 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy582 [@tailcall]) st exp_hashlen prefix
+        else (yy579 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy579 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy583 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy578 [@tailcall]) st exp_hashlen prefix
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy583 [@tailcall]) st exp_hashlen prefix
+        else (yy579 [@tailcall]) st exp_hashlen prefix
+      ) else (
+        (yy579 [@tailcall]) st exp_hashlen prefix
+      )
+
+and yy584 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   error st "Unterminated raw string"
 
 and yyfnrsingle (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  (yy535 [@tailcall]) st exp_hashlen prefix
+  (yy555 [@tailcall]) st exp_hashlen prefix
 
-and yy482 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
+and yy502 (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
   match st.yycond with
     | YYC_rmulti -> (yyfnrmulti [@tailcall]) st exp_hashlen prefix
     | YYC_rsingle -> (yyfnrsingle [@tailcall]) st exp_hashlen prefix
 
 and raw_string (st : tokenizer_state) (exp_hashlen : int) (prefix : string) : token =
-  (yy482 [@tailcall]) st exp_hashlen prefix
+  (yy502 [@tailcall]) st exp_hashlen prefix
 
 
 
@@ -9047,11 +9427,11 @@ let raw_string_singleline st exp_hashlen =
   raw_string st exp_hashlen ""
 
 
-let rec yy565 (st : tokenizer_state) : token =
+let rec yy585 (st : tokenizer_state) : token =
   save_token_position st; save_start_position st;
-  (yy566 [@tailcall]) st
+  (yy586 [@tailcall]) st
 
-and yy566 (st : tokenizer_state) : token =
+and yy586 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00'
@@ -9061,22 +9441,22 @@ and yy566 (st : tokenizer_state) : token =
     | ']'
     | '\x7F' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy566 [@tailcall]) st
-        else (yy714 [@tailcall]) st
+        if (st.refill st) then (yy586 [@tailcall]) st
+        else (yy734 [@tailcall]) st
       ) else (
         st.yycursor <- st.yycursor + 1;
-        (yy567 [@tailcall]) st
+        (yy587 [@tailcall]) st
       )
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
+      (yy589 [@tailcall]) st
     | '\n'..'\x0C' ->
       st.yycursor <- st.yycursor + 1;
-      (yy571 [@tailcall]) st
+      (yy591 [@tailcall]) st
     | '\r' ->
       st.yycursor <- st.yycursor + 1;
-      (yy573 [@tailcall]) st
+      (yy593 [@tailcall]) st
     | '!'
     | '$'..'\''
     | '*'
@@ -9088,98 +9468,98 @@ and yy566 (st : tokenizer_state) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
+      (yy594 [@tailcall]) st
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy577 [@tailcall]) st
+      (yy597 [@tailcall]) st
     | '#' ->
       st.yycursor <- st.yycursor + 1;
-      (yy579 [@tailcall]) st
+      (yy599 [@tailcall]) st
     | '(' ->
       st.yycursor <- st.yycursor + 1;
-      (yy580 [@tailcall]) st
+      (yy600 [@tailcall]) st
     | ')' ->
       st.yycursor <- st.yycursor + 1;
-      (yy581 [@tailcall]) st
+      (yy601 [@tailcall]) st
     | '+'
     | '-' ->
       st.yycursor <- st.yycursor + 1;
-      (yy582 [@tailcall]) st
+      (yy602 [@tailcall]) st
     | '.' ->
       st.yycursor <- st.yycursor + 1;
-      (yy583 [@tailcall]) st
+      (yy603 [@tailcall]) st
     | '/' ->
       st.yycursor <- st.yycursor + 1;
-      (yy584 [@tailcall]) st
+      (yy604 [@tailcall]) st
     | '0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy585 [@tailcall]) st
+      (yy605 [@tailcall]) st
     | '1'..'9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy587 [@tailcall]) st
+      (yy607 [@tailcall]) st
     | ';' ->
       st.yycursor <- st.yycursor + 1;
-      (yy588 [@tailcall]) st
+      (yy608 [@tailcall]) st
     | '=' ->
       st.yycursor <- st.yycursor + 1;
-      (yy589 [@tailcall]) st
+      (yy609 [@tailcall]) st
     | '\\' ->
       st.yycursor <- st.yycursor + 1;
-      (yy590 [@tailcall]) st
+      (yy610 [@tailcall]) st
     | '{' ->
       st.yycursor <- st.yycursor + 1;
-      (yy591 [@tailcall]) st
+      (yy611 [@tailcall]) st
     | '}' ->
       st.yycursor <- st.yycursor + 1;
-      (yy592 [@tailcall]) st
+      (yy612 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy595 [@tailcall]) st
+      (yy615 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy596 [@tailcall]) st
+      (yy616 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy597 [@tailcall]) st
+      (yy617 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy598 [@tailcall]) st
+      (yy618 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy599 [@tailcall]) st
+      (yy619 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy600 [@tailcall]) st
+      (yy620 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy601 [@tailcall]) st
+      (yy621 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy602 [@tailcall]) st
+      (yy622 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy603 [@tailcall]) st
+      (yy623 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy604 [@tailcall]) st
+      (yy624 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy605 [@tailcall]) st
+      (yy625 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy606 [@tailcall]) st
+      (yy626 [@tailcall]) st
     | _ ->
       st.yycursor <- st.yycursor + 1;
-      (yy593 [@tailcall]) st
+      (yy613 [@tailcall]) st
 
-and yy567 (st : tokenizer_state) : token =
-  (yy568 [@tailcall]) st
+and yy587 (st : tokenizer_state) : token =
+  (yy588 [@tailcall]) st
 
-and yy568 (st : tokenizer_state) : token =
+and yy588 (st : tokenizer_state) : token =
   error st "Illegal character"
 
-and yy569 (st : tokenizer_state) : token =
+and yy589 (st : tokenizer_state) : token =
   st.yyaccept <- 0;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -9187,57 +9567,57 @@ and yy569 (st : tokenizer_state) : token =
     | '\t'
     | ' ' ->
       st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
+      (yy589 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy607 [@tailcall]) st
+      (yy627 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy609 [@tailcall]) st
+      (yy629 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy610 [@tailcall]) st
+      (yy630 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy611 [@tailcall]) st
+      (yy631 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy569 [@tailcall]) st
-        else (yy570 [@tailcall]) st
+        if (st.refill st) then (yy589 [@tailcall]) st
+        else (yy590 [@tailcall]) st
       ) else (
-        (yy570 [@tailcall]) st
+        (yy590 [@tailcall]) st
       )
 
-and yy570 (st : tokenizer_state) : token =
+and yy590 (st : tokenizer_state) : token =
   main st
 
-and yy571 (st : tokenizer_state) : token =
-  (yy572 [@tailcall]) st
+and yy591 (st : tokenizer_state) : token =
+  (yy592 [@tailcall]) st
 
-and yy572 (st : tokenizer_state) : token =
+and yy592 (st : tokenizer_state) : token =
   newline st; NEWLINE
 
-and yy573 (st : tokenizer_state) : token =
+and yy593 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\n' ->
       st.yycursor <- st.yycursor + 1;
-      (yy571 [@tailcall]) st
+      (yy591 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy573 [@tailcall]) st
-        else (yy572 [@tailcall]) st
+        if (st.refill st) then (yy593 [@tailcall]) st
+        else (yy592 [@tailcall]) st
       ) else (
-        (yy572 [@tailcall]) st
+        (yy592 [@tailcall]) st
       )
 
-and yy574 (st : tokenizer_state) : token =
+and yy594 (st : tokenizer_state) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  (yy575 [@tailcall]) st yych
+  (yy595 [@tailcall]) st yych
 
-and yy575 (st : tokenizer_state) (yych : char) : token =
+and yy595 (st : tokenizer_state) (yych : char) : token =
   match yych with
     | '!'
     | '$'..'\''
@@ -9249,77 +9629,77 @@ and yy575 (st : tokenizer_state) (yych : char) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
+      (yy594 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy612 [@tailcall]) st
+      (yy632 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
+      (yy633 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy614 [@tailcall]) st
+      (yy634 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy615 [@tailcall]) st
+      (yy635 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy616 [@tailcall]) st
+      (yy636 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy617 [@tailcall]) st
+      (yy637 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy618 [@tailcall]) st
+      (yy638 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy619 [@tailcall]) st
+      (yy639 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy620 [@tailcall]) st
+      (yy640 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy621 [@tailcall]) st
+      (yy641 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy622 [@tailcall]) st
+      (yy642 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy623 [@tailcall]) st
+      (yy643 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy574 [@tailcall]) st
-        else (yy576 [@tailcall]) st
+        if (st.refill st) then (yy594 [@tailcall]) st
+        else (yy596 [@tailcall]) st
       ) else (
-        (yy576 [@tailcall]) st
+        (yy596 [@tailcall]) st
       )
 
-and yy576 (st : tokenizer_state) : token =
+and yy596 (st : tokenizer_state) : token =
   
     IDENT_STRING (lexeme st)
 
 
-and yy577 (st : tokenizer_state) : token =
+and yy597 (st : tokenizer_state) : token =
   st.yyaccept <- 2;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy624 [@tailcall]) st
+      (yy644 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy577 [@tailcall]) st
-        else (yy578 [@tailcall]) st
+        if (st.refill st) then (yy597 [@tailcall]) st
+        else (yy598 [@tailcall]) st
       ) else (
-        (yy578 [@tailcall]) st
+        (yy598 [@tailcall]) st
       )
 
-and yy578 (st : tokenizer_state) : token =
+and yy598 (st : tokenizer_state) : token =
   Buffer.reset st.info.strbuf; string_singleline st
 
-and yy579 (st : tokenizer_state) : token =
+and yy599 (st : tokenizer_state) : token =
   st.yyaccept <- 3;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -9333,88 +9713,88 @@ and yy579 (st : tokenizer_state) : token =
     | '^'..'z'
     | '|'
     | '~'
-    | '\xC2'..'\xF4' -> (yy626 [@tailcall]) st yych
+    | '\xC2'..'\xF4' -> (yy646 [@tailcall]) st yych
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy628 [@tailcall]) st
+      (yy648 [@tailcall]) st
     | '#' ->
       st.yycursor <- st.yycursor + 1;
-      (yy630 [@tailcall]) st
+      (yy650 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy579 [@tailcall]) st
-        else (yy568 [@tailcall]) st
+        if (st.refill st) then (yy599 [@tailcall]) st
+        else (yy588 [@tailcall]) st
       ) else (
-        (yy568 [@tailcall]) st
+        (yy588 [@tailcall]) st
       )
 
-and yy580 (st : tokenizer_state) : token =
+and yy600 (st : tokenizer_state) : token =
   LPAREN
 
-and yy581 (st : tokenizer_state) : token =
+and yy601 (st : tokenizer_state) : token =
   RPAREN
 
-and yy582 (st : tokenizer_state) : token =
+and yy602 (st : tokenizer_state) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy582 [@tailcall]) st
-        else (yy576 [@tailcall]) st
+        if (st.refill st) then (yy602 [@tailcall]) st
+        else (yy596 [@tailcall]) st
       ) else (
-        (yy576 [@tailcall]) st
+        (yy596 [@tailcall]) st
       )
     | '.' ->
       st.yycursor <- st.yycursor + 1;
-      (yy583 [@tailcall]) st
+      (yy603 [@tailcall]) st
     | '0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy585 [@tailcall]) st
+      (yy605 [@tailcall]) st
     | '1'..'9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy587 [@tailcall]) st
-    | _ -> (yy575 [@tailcall]) st yych
+      (yy607 [@tailcall]) st
+    | _ -> (yy595 [@tailcall]) st yych
 
-and yy583 (st : tokenizer_state) : token =
+and yy603 (st : tokenizer_state) : token =
   st.yyaccept <- 1;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy583 [@tailcall]) st
-        else (yy576 [@tailcall]) st
+        if (st.refill st) then (yy603 [@tailcall]) st
+        else (yy596 [@tailcall]) st
       ) else (
-        (yy576 [@tailcall]) st
+        (yy596 [@tailcall]) st
       )
     | '0'..'9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy643 [@tailcall]) st
-    | _ -> (yy575 [@tailcall]) st yych
+      (yy663 [@tailcall]) st
+    | _ -> (yy595 [@tailcall]) st yych
 
-and yy584 (st : tokenizer_state) : token =
+and yy604 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '*' ->
       st.yycursor <- st.yycursor + 1;
-      (yy645 [@tailcall]) st
+      (yy665 [@tailcall]) st
     | '-' ->
       st.yycursor <- st.yycursor + 1;
-      (yy646 [@tailcall]) st
+      (yy666 [@tailcall]) st
     | '/' ->
       st.yycursor <- st.yycursor + 1;
-      (yy647 [@tailcall]) st
+      (yy667 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy584 [@tailcall]) st
-        else (yy568 [@tailcall]) st
+        if (st.refill st) then (yy604 [@tailcall]) st
+        else (yy588 [@tailcall]) st
       ) else (
-        (yy568 [@tailcall]) st
+        (yy588 [@tailcall]) st
       )
 
-and yy585 (st : tokenizer_state) : token =
+and yy605 (st : tokenizer_state) : token =
   st.yyaccept <- 4;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -9434,39 +9814,39 @@ and yy585 (st : tokenizer_state) : token =
     | 'y'..'z'
     | '|'
     | '~'
-    | '\xC2'..'\xF4' -> (yy649 [@tailcall]) st yych
+    | '\xC2'..'\xF4' -> (yy669 [@tailcall]) st yych
     | '.' ->
       st.yycursor <- st.yycursor + 1;
-      (yy651 [@tailcall]) st
+      (yy671 [@tailcall]) st
     | '0'..'9'
     | '_' ->
       st.yycursor <- st.yycursor + 1;
-      (yy587 [@tailcall]) st
+      (yy607 [@tailcall]) st
     | 'E'
     | 'e' ->
       st.yycursor <- st.yycursor + 1;
-      (yy652 [@tailcall]) st
+      (yy672 [@tailcall]) st
     | 'b' ->
       st.yycursor <- st.yycursor + 1;
-      (yy653 [@tailcall]) st
+      (yy673 [@tailcall]) st
     | 'o' ->
       st.yycursor <- st.yycursor + 1;
-      (yy654 [@tailcall]) st
+      (yy674 [@tailcall]) st
     | 'x' ->
       st.yycursor <- st.yycursor + 1;
-      (yy655 [@tailcall]) st
+      (yy675 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy585 [@tailcall]) st
-        else (yy586 [@tailcall]) st
+        if (st.refill st) then (yy605 [@tailcall]) st
+        else (yy606 [@tailcall]) st
       ) else (
-        (yy586 [@tailcall]) st
+        (yy606 [@tailcall]) st
       )
 
-and yy586 (st : tokenizer_state) : token =
+and yy606 (st : tokenizer_state) : token =
   INTEGER (lexeme st)
 
-and yy587 (st : tokenizer_state) : token =
+and yy607 (st : tokenizer_state) : token =
   st.yyaccept <- 4;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -9484,579 +9864,579 @@ and yy587 (st : tokenizer_state) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | '.' ->
       st.yycursor <- st.yycursor + 1;
-      (yy651 [@tailcall]) st
+      (yy671 [@tailcall]) st
     | '0'..'9'
     | '_' ->
       st.yycursor <- st.yycursor + 1;
-      (yy587 [@tailcall]) st
+      (yy607 [@tailcall]) st
     | 'E'
     | 'e' ->
       st.yycursor <- st.yycursor + 1;
-      (yy652 [@tailcall]) st
+      (yy672 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy656 [@tailcall]) st
+      (yy676 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy658 [@tailcall]) st
+      (yy678 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy659 [@tailcall]) st
+      (yy679 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy660 [@tailcall]) st
+      (yy680 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy661 [@tailcall]) st
+      (yy681 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy663 [@tailcall]) st
+      (yy683 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy664 [@tailcall]) st
+      (yy684 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy665 [@tailcall]) st
+      (yy685 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy666 [@tailcall]) st
+      (yy686 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy667 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy587 [@tailcall]) st
-        else (yy586 [@tailcall]) st
-      ) else (
-        (yy586 [@tailcall]) st
-      )
-
-and yy588 (st : tokenizer_state) : token =
-  SEMI
-
-and yy589 (st : tokenizer_state) : token =
-  EQ
-
-and yy590 (st : tokenizer_state) : token =
-  line_cont st; main st
-
-and yy591 (st : tokenizer_state) : token =
-  LBRACE
-
-and yy592 (st : tokenizer_state) : token =
-  RBRACE
-
-and yy593 (st : tokenizer_state) : token =
-  (yy594 [@tailcall]) st
-
-and yy594 (st : tokenizer_state) : token =
-  malformed_utf8 st
-
-and yy595 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\x9F'
-    | '\xA1'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
-    | '\x85' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy571 [@tailcall]) st
-    | '\xA0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy595 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy596 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy596 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy597 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy597 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy598 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x99'
-    | '\x9B'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy668 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy598 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy599 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy669 [@tailcall]) st
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy670 [@tailcall]) st
-    | '\x82'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy599 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy600 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy668 [@tailcall]) st
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy600 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy601 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy601 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy602 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy602 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy603 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBA'
-    | '\xBC'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
-    | '\xBB' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy671 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy603 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy604 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy618 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy604 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy605 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy618 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy605 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy606 (st : tokenizer_state) : token =
-  st.yyaccept <- 5;
-  st.yymarker <- st.yycursor;
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy618 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy606 [@tailcall]) st
-        else (yy594 [@tailcall]) st
-      ) else (
-        (yy594 [@tailcall]) st
-      )
-
-and yy607 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
+      (yy687 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy607 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy606 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy606 [@tailcall]) st
       )
 
 and yy608 (st : tokenizer_state) : token =
-  st.yycursor <- st.yymarker;
-  match st.yyaccept with
-    | 0 -> (yy570 [@tailcall]) st
-    | 1 -> (yy576 [@tailcall]) st
-    | 2 -> (yy578 [@tailcall]) st
-    | 3 -> (yy568 [@tailcall]) st
-    | 4 -> (yy586 [@tailcall]) st
-    | 5 -> (yy594 [@tailcall]) st
-    | 6 -> (yy627 [@tailcall]) st
-    | 7 -> (yy629 [@tailcall]) st
-    | 8 -> (yy644 [@tailcall]) st
-    | 9 -> (yy650 [@tailcall]) st
-    | _ -> (yy698 [@tailcall]) st
+  SEMI
 
 and yy609 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy672 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy609 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
+  EQ
 
 and yy610 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy673 [@tailcall]) st
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy674 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy610 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
+  line_cont st; main st
 
 and yy611 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy672 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy611 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
+  LBRACE
 
 and yy612 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\x9F'
-    | '\xA1'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy612 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
+  RBRACE
 
 and yy613 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy613 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
+  (yy614 [@tailcall]) st
 
 and yy614 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy614 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
+  malformed_utf8 st
 
 and yy615 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x99'
-    | '\x9B'..'\xBF' ->
+    | '\x80'..'\x84'
+    | '\x86'..'\x9F'
+    | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
-    | '\x9A' ->
+      (yy594 [@tailcall]) st
+    | '\x85' ->
       st.yycursor <- st.yycursor + 1;
-      (yy675 [@tailcall]) st
+      (yy591 [@tailcall]) st
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy589 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy615 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy614 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy614 [@tailcall]) st
       )
 
 and yy616 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy676 [@tailcall]) st
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy677 [@tailcall]) st
-    | '\x82'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
+      (yy594 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy616 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy614 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy614 [@tailcall]) st
       )
 
 and yy617 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy617 [@tailcall]) st
+        else (yy614 [@tailcall]) st
+      ) else (
+        (yy614 [@tailcall]) st
+      )
+
+and yy618 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy688 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy618 [@tailcall]) st
+        else (yy614 [@tailcall]) st
+      ) else (
+        (yy614 [@tailcall]) st
+      )
+
+and yy619 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy675 [@tailcall]) st
-    | '\x81'..'\xBF' ->
+      (yy689 [@tailcall]) st
+    | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
+      (yy690 [@tailcall]) st
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy617 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy619 [@tailcall]) st
+        else (yy614 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy614 [@tailcall]) st
       )
 
-and yy618 (st : tokenizer_state) : token =
+and yy620 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy688 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy620 [@tailcall]) st
+        else (yy614 [@tailcall]) st
+      ) else (
+        (yy614 [@tailcall]) st
+      )
+
+and yy621 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
+      (yy633 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy618 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy621 [@tailcall]) st
+        else (yy614 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy614 [@tailcall]) st
       )
 
-and yy619 (st : tokenizer_state) : token =
+and yy622 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
+      (yy633 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy619 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy622 [@tailcall]) st
+        else (yy614 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy614 [@tailcall]) st
       )
 
-and yy620 (st : tokenizer_state) : token =
+and yy623 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy613 [@tailcall]) st
+      (yy633 [@tailcall]) st
     | '\xBB' ->
       st.yycursor <- st.yycursor + 1;
-      (yy678 [@tailcall]) st
+      (yy691 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy620 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy623 [@tailcall]) st
+        else (yy614 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy614 [@tailcall]) st
       )
 
-and yy621 (st : tokenizer_state) : token =
+and yy624 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy618 [@tailcall]) st
+      (yy638 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy621 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy624 [@tailcall]) st
+        else (yy614 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy614 [@tailcall]) st
       )
 
-and yy622 (st : tokenizer_state) : token =
+and yy625 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy618 [@tailcall]) st
+      (yy638 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy622 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy625 [@tailcall]) st
+        else (yy614 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy614 [@tailcall]) st
       )
 
-and yy623 (st : tokenizer_state) : token =
+and yy626 (st : tokenizer_state) : token =
+  st.yyaccept <- 5;
+  st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy618 [@tailcall]) st
+      (yy638 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy623 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy626 [@tailcall]) st
+        else (yy614 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy614 [@tailcall]) st
       )
 
-and yy624 (st : tokenizer_state) : token =
+and yy627 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy589 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy627 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy628 (st : tokenizer_state) : token =
+  st.yycursor <- st.yymarker;
+  match st.yyaccept with
+    | 0 -> (yy590 [@tailcall]) st
+    | 1 -> (yy596 [@tailcall]) st
+    | 2 -> (yy598 [@tailcall]) st
+    | 3 -> (yy588 [@tailcall]) st
+    | 4 -> (yy606 [@tailcall]) st
+    | 5 -> (yy614 [@tailcall]) st
+    | 6 -> (yy647 [@tailcall]) st
+    | 7 -> (yy649 [@tailcall]) st
+    | 8 -> (yy664 [@tailcall]) st
+    | 9 -> (yy670 [@tailcall]) st
+    | _ -> (yy718 [@tailcall]) st
+
+and yy629 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy692 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy629 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy630 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy693 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy694 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy630 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy631 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy692 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy631 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy632 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\x9F'
+    | '\xA1'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy594 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy632 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy633 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy594 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy633 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy634 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy634 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy635 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy695 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy635 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy636 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy696 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy697 [@tailcall]) st
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy636 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy637 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy695 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy637 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy638 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy638 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy639 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy639 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy640 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBA'
+    | '\xBC'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy633 [@tailcall]) st
+    | '\xBB' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy698 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy640 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy641 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy641 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy642 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy642 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy643 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy638 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy643 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy644 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy679 [@tailcall]) st
+      (yy699 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy624 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy644 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy625 (st : tokenizer_state) : token =
+and yy645 (st : tokenizer_state) : token =
   st.yyaccept <- 6;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  (yy626 [@tailcall]) st yych
+  (yy646 [@tailcall]) st yych
 
-and yy626 (st : tokenizer_state) (yych : char) : token =
+and yy646 (st : tokenizer_state) (yych : char) : token =
   match yych with
     | '!'
     | '$'..'\''
@@ -10068,53 +10448,53 @@ and yy626 (st : tokenizer_state) (yych : char) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy625 [@tailcall]) st
+      (yy645 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy631 [@tailcall]) st
+      (yy651 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy632 [@tailcall]) st
+      (yy652 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy633 [@tailcall]) st
+      (yy653 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy634 [@tailcall]) st
+      (yy654 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy635 [@tailcall]) st
+      (yy655 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy636 [@tailcall]) st
+      (yy656 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy637 [@tailcall]) st
+      (yy657 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy638 [@tailcall]) st
+      (yy658 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy639 [@tailcall]) st
+      (yy659 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy640 [@tailcall]) st
+      (yy660 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy641 [@tailcall]) st
+      (yy661 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy642 [@tailcall]) st
+      (yy662 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy625 [@tailcall]) st
-        else (yy627 [@tailcall]) st
+        if (st.refill st) then (yy645 [@tailcall]) st
+        else (yy647 [@tailcall]) st
       ) else (
-        (yy627 [@tailcall]) st
+        (yy647 [@tailcall]) st
       )
 
-and yy627 (st : tokenizer_state) : token =
+and yy647 (st : tokenizer_state) : token =
   
     begin match lexeme st with
     | "#true" -> TRUE
@@ -10127,23 +10507,23 @@ and yy627 (st : tokenizer_state) : token =
     end
 
 
-and yy628 (st : tokenizer_state) : token =
+and yy648 (st : tokenizer_state) : token =
   st.yyaccept <- 7;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy680 [@tailcall]) st
+      (yy700 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy628 [@tailcall]) st
-        else (yy629 [@tailcall]) st
+        if (st.refill st) then (yy648 [@tailcall]) st
+        else (yy649 [@tailcall]) st
       ) else (
-        (yy629 [@tailcall]) st
+        (yy649 [@tailcall]) st
       )
 
-and yy629 (st : tokenizer_state) : token =
+and yy649 (st : tokenizer_state) : token =
   st.t1 <- st.yycursor;
   st.t1 <- st.t1 - 1;
   
@@ -10152,211 +10532,211 @@ and yy629 (st : tokenizer_state) : token =
     raw_string_singleline st hashlen
 
 
-and yy630 (st : tokenizer_state) : token =
+and yy650 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '"' ->
       st.yycursor <- st.yycursor + 1;
-      (yy628 [@tailcall]) st
+      (yy648 [@tailcall]) st
     | '#' ->
       st.yycursor <- st.yycursor + 1;
-      (yy630 [@tailcall]) st
+      (yy650 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy630 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy650 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy631 (st : tokenizer_state) : token =
+and yy651 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy625 [@tailcall]) st
+      (yy645 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy631 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy651 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy632 (st : tokenizer_state) : token =
+and yy652 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy625 [@tailcall]) st
+      (yy645 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy632 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy652 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy633 (st : tokenizer_state) : token =
+and yy653 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy632 [@tailcall]) st
+      (yy652 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy633 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy653 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy634 (st : tokenizer_state) : token =
+and yy654 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x99'
     | '\x9B'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy632 [@tailcall]) st
+      (yy652 [@tailcall]) st
     | '\x9A' ->
       st.yycursor <- st.yycursor + 1;
-      (yy681 [@tailcall]) st
+      (yy701 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy634 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy654 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy635 (st : tokenizer_state) : token =
+and yy655 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy682 [@tailcall]) st
+      (yy702 [@tailcall]) st
     | '\x81' ->
       st.yycursor <- st.yycursor + 1;
-      (yy683 [@tailcall]) st
+      (yy703 [@tailcall]) st
     | '\x82'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy632 [@tailcall]) st
+      (yy652 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy635 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy655 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy636 (st : tokenizer_state) : token =
+and yy656 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy681 [@tailcall]) st
+      (yy701 [@tailcall]) st
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy632 [@tailcall]) st
+      (yy652 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy636 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy656 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy637 (st : tokenizer_state) : token =
+and yy657 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy632 [@tailcall]) st
+      (yy652 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy637 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy657 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy638 (st : tokenizer_state) : token =
+and yy658 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy632 [@tailcall]) st
+      (yy652 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy638 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy658 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy639 (st : tokenizer_state) : token =
+and yy659 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBA'
     | '\xBC'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy632 [@tailcall]) st
+      (yy652 [@tailcall]) st
     | '\xBB' ->
       st.yycursor <- st.yycursor + 1;
-      (yy684 [@tailcall]) st
+      (yy704 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy639 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy659 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy640 (st : tokenizer_state) : token =
+and yy660 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy637 [@tailcall]) st
+      (yy657 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy640 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy660 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy641 (st : tokenizer_state) : token =
+and yy661 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy637 [@tailcall]) st
+      (yy657 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy641 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy661 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy642 (st : tokenizer_state) : token =
+and yy662 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy637 [@tailcall]) st
+      (yy657 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy642 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy662 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy643 (st : tokenizer_state) : token =
+and yy663 (st : tokenizer_state) : token =
   st.yyaccept <- 8;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -10371,73 +10751,73 @@ and yy643 (st : tokenizer_state) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy643 [@tailcall]) st
+      (yy663 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy685 [@tailcall]) st
+      (yy705 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy686 [@tailcall]) st
+      (yy706 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy687 [@tailcall]) st
+      (yy707 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy688 [@tailcall]) st
+      (yy708 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy689 [@tailcall]) st
+      (yy709 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy690 [@tailcall]) st
+      (yy710 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy691 [@tailcall]) st
+      (yy711 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy692 [@tailcall]) st
+      (yy712 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy693 [@tailcall]) st
+      (yy713 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy694 [@tailcall]) st
+      (yy714 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy695 [@tailcall]) st
+      (yy715 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy696 [@tailcall]) st
+      (yy716 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy643 [@tailcall]) st
-        else (yy644 [@tailcall]) st
+        if (st.refill st) then (yy663 [@tailcall]) st
+        else (yy664 [@tailcall]) st
       ) else (
-        (yy644 [@tailcall]) st
+        (yy664 [@tailcall]) st
       )
 
-and yy644 (st : tokenizer_state) : token =
+and yy664 (st : tokenizer_state) : token =
   
     error st "Number-like identifiers are invalid and must be quoted"
 
 
-and yy645 (st : tokenizer_state) : token =
+and yy665 (st : tokenizer_state) : token =
   multiline_comment st 0; main st
 
-and yy646 (st : tokenizer_state) : token =
+and yy666 (st : tokenizer_state) : token =
   SLASHDASH
 
-and yy647 (st : tokenizer_state) : token =
+and yy667 (st : tokenizer_state) : token =
   singleline_comment st; NEWLINE
 
-and yy648 (st : tokenizer_state) : token =
+and yy668 (st : tokenizer_state) : token =
   st.yyaccept <- 9;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  (yy649 [@tailcall]) st yych
+  (yy669 [@tailcall]) st yych
 
-and yy649 (st : tokenizer_state) (yych : char) : token =
+and yy669 (st : tokenizer_state) (yych : char) : token =
   match yych with
     | '!'
     | '$'..'\''
@@ -10449,612 +10829,305 @@ and yy649 (st : tokenizer_state) (yych : char) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy656 [@tailcall]) st
+      (yy676 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy658 [@tailcall]) st
+      (yy678 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy659 [@tailcall]) st
+      (yy679 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy660 [@tailcall]) st
+      (yy680 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy661 [@tailcall]) st
+      (yy681 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy663 [@tailcall]) st
+      (yy683 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy664 [@tailcall]) st
+      (yy684 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy665 [@tailcall]) st
+      (yy685 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy666 [@tailcall]) st
+      (yy686 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy667 [@tailcall]) st
+      (yy687 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy648 [@tailcall]) st
-        else (yy650 [@tailcall]) st
+        if (st.refill st) then (yy668 [@tailcall]) st
+        else (yy670 [@tailcall]) st
       ) else (
-        (yy650 [@tailcall]) st
+        (yy670 [@tailcall]) st
       )
 
-and yy650 (st : tokenizer_state) : token =
+and yy670 (st : tokenizer_state) : token =
   
     error st @@ sprintf "Invalid number literal %s" (lexeme st)
 
 
-and yy651 (st : tokenizer_state) : token =
+and yy671 (st : tokenizer_state) : token =
   st.yyaccept <- 9;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy651 [@tailcall]) st
-        else (yy650 [@tailcall]) st
+        if (st.refill st) then (yy671 [@tailcall]) st
+        else (yy670 [@tailcall]) st
       ) else (
-        (yy650 [@tailcall]) st
+        (yy670 [@tailcall]) st
       )
     | '0'..'9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy697 [@tailcall]) st
-    | _ -> (yy649 [@tailcall]) st yych
+      (yy717 [@tailcall]) st
+    | _ -> (yy669 [@tailcall]) st yych
 
-and yy652 (st : tokenizer_state) : token =
+and yy672 (st : tokenizer_state) : token =
   st.yyaccept <- 9;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy652 [@tailcall]) st
-        else (yy650 [@tailcall]) st
+        if (st.refill st) then (yy672 [@tailcall]) st
+        else (yy670 [@tailcall]) st
       ) else (
-        (yy650 [@tailcall]) st
+        (yy670 [@tailcall]) st
       )
     | '+'
     | '-' ->
       st.yycursor <- st.yycursor + 1;
-      (yy699 [@tailcall]) st
+      (yy719 [@tailcall]) st
     | '0'..'9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy700 [@tailcall]) st
-    | _ -> (yy649 [@tailcall]) st yych
+      (yy720 [@tailcall]) st
+    | _ -> (yy669 [@tailcall]) st yych
 
-and yy653 (st : tokenizer_state) : token =
+and yy673 (st : tokenizer_state) : token =
   st.yyaccept <- 9;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy653 [@tailcall]) st
-        else (yy650 [@tailcall]) st
+        if (st.refill st) then (yy673 [@tailcall]) st
+        else (yy670 [@tailcall]) st
       ) else (
-        (yy650 [@tailcall]) st
+        (yy670 [@tailcall]) st
       )
     | '0'..'1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy701 [@tailcall]) st
-    | _ -> (yy649 [@tailcall]) st yych
+      (yy721 [@tailcall]) st
+    | _ -> (yy669 [@tailcall]) st yych
 
-and yy654 (st : tokenizer_state) : token =
+and yy674 (st : tokenizer_state) : token =
   st.yyaccept <- 9;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy654 [@tailcall]) st
-        else (yy650 [@tailcall]) st
+        if (st.refill st) then (yy674 [@tailcall]) st
+        else (yy670 [@tailcall]) st
       ) else (
-        (yy650 [@tailcall]) st
+        (yy670 [@tailcall]) st
       )
     | '0'..'7' ->
       st.yycursor <- st.yycursor + 1;
-      (yy702 [@tailcall]) st
-    | _ -> (yy649 [@tailcall]) st yych
+      (yy722 [@tailcall]) st
+    | _ -> (yy669 [@tailcall]) st yych
 
-and yy655 (st : tokenizer_state) : token =
+and yy675 (st : tokenizer_state) : token =
   st.yyaccept <- 9;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy655 [@tailcall]) st
-        else (yy650 [@tailcall]) st
+        if (st.refill st) then (yy675 [@tailcall]) st
+        else (yy670 [@tailcall]) st
       ) else (
-        (yy650 [@tailcall]) st
+        (yy670 [@tailcall]) st
       )
     | '0'..'9'
     | 'A'..'F'
     | 'a'..'f' ->
       st.yycursor <- st.yycursor + 1;
-      (yy703 [@tailcall]) st
-    | _ -> (yy649 [@tailcall]) st yych
+      (yy723 [@tailcall]) st
+    | _ -> (yy669 [@tailcall]) st yych
 
-and yy656 (st : tokenizer_state) : token =
+and yy676 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x84'
     | '\x86'..'\x9F'
     | '\xA1'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy656 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy657 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy657 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy658 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\xA0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy658 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy659 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x99'
-    | '\x9B'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
-    | '\x9A' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy704 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy659 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy660 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy705 [@tailcall]) st
-    | '\x81' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy706 [@tailcall]) st
-    | '\x82'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy660 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy661 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy704 [@tailcall]) st
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy661 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy662 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy662 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy663 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy663 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy664 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBA'
-    | '\xBC'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
-    | '\xBB' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy707 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy664 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy665 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x90'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy665 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy666 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy666 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy667 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy667 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy668 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy668 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy669 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
-    | '\x8B'..'\x8D'
-    | '\x90'..'\xA7'
-    | '\xB0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
-    | '\x8E'..'\x8F'
-    | '\xAA'..'\xAE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy567 [@tailcall]) st
-    | '\xA8'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy571 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy669 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy670 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x9E'
-    | '\xA0'..'\xA5'
-    | '\xAA'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
-    | '\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
-    | '\xA6'..'\xA9' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy567 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy670 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy671 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\xBE' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
-    | '\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy708 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy671 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy672 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy672 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy673 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x80'..'\x8A'
-    | '\xAF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy673 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy674 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x9F' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy569 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy674 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy675 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x81'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
-    | _ ->
-      if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy675 [@tailcall]) st
-        else (yy608 [@tailcall]) st
-      ) else (
-        (yy608 [@tailcall]) st
-      )
-
-and yy676 (st : tokenizer_state) : token =
-  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
-  match yych with
-    | '\x8B'..'\x8D'
-    | '\x90'..'\xA7'
-    | '\xB0'..'\xBF' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy676 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy677 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x9E'
-    | '\xA0'..'\xA5'
-    | '\xAA'..'\xBF' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy677 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy678 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBE' ->
+    | '\xA0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy574 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy678 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy679 (st : tokenizer_state) : token =
-  Buffer.reset st.info.strbuf; string_multiline st
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy677 [@tailcall]) st
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy724 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy679 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
 
 and yy680 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '"' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy709 [@tailcall]) st
+      (yy725 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy726 [@tailcall]) st
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy677 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy680 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy681 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy724 [@tailcall]) st
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy625 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy681 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy682 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x8B'..'\x8D'
-    | '\x90'..'\xA7'
-    | '\xB0'..'\xBF' ->
+    | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy625 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy682 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy683 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x9E'
-    | '\xA0'..'\xA5'
-    | '\xAA'..'\xBF' ->
+    | '\x80'..'\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy625 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy683 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy684 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBE' ->
+    | '\x80'..'\xBA'
+    | '\xBC'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy625 [@tailcall]) st
+      (yy677 [@tailcall]) st
+    | '\xBB' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy727 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy684 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy685 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x84'
-    | '\x86'..'\x9F'
-    | '\xA1'..'\xBF' ->
+    | '\x90'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy643 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy685 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy686 (st : tokenizer_state) : token =
@@ -11062,173 +11135,480 @@ and yy686 (st : tokenizer_state) : token =
   match yych with
     | '\x80'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy643 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy686 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy687 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\xA0'..'\xBF' ->
+    | '\x80'..'\x8F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy686 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy687 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy688 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x99'
-    | '\x9B'..'\xBF' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy686 [@tailcall]) st
-    | '\x9A' ->
+      (yy589 [@tailcall]) st
+    | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy710 [@tailcall]) st
+      (yy594 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy688 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy689 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\x80'..'\x8A'
+    | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy711 [@tailcall]) st
-    | '\x81' ->
+      (yy589 [@tailcall]) st
+    | '\x8B'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xB0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy712 [@tailcall]) st
-    | '\x82'..'\xBF' ->
+      (yy594 [@tailcall]) st
+    | '\x8E'..'\x8F'
+    | '\xAA'..'\xAE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy686 [@tailcall]) st
+      (yy587 [@tailcall]) st
+    | '\xA8'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy591 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy689 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy690 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80' ->
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xA5'
+    | '\xAA'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy710 [@tailcall]) st
-    | '\x81'..'\xBF' ->
+      (yy594 [@tailcall]) st
+    | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy686 [@tailcall]) st
+      (yy589 [@tailcall]) st
+    | '\xA6'..'\xA9' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy587 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy690 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy691 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBF' ->
+    | '\x80'..'\xBE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy686 [@tailcall]) st
+      (yy594 [@tailcall]) st
+    | '\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy728 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy691 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy692 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x9F' ->
+    | '\x80' ->
       st.yycursor <- st.yycursor + 1;
-      (yy686 [@tailcall]) st
+      (yy589 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy692 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy693 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBA'
-    | '\xBC'..'\xBF' ->
+    | '\x80'..'\x8A'
+    | '\xAF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy686 [@tailcall]) st
-    | '\xBB' ->
-      st.yycursor <- st.yycursor + 1;
-      (yy713 [@tailcall]) st
+      (yy589 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy693 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy694 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x90'..'\xBF' ->
+    | '\x9F' ->
       st.yycursor <- st.yycursor + 1;
-      (yy691 [@tailcall]) st
+      (yy589 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy694 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy695 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\xBF' ->
+    | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy691 [@tailcall]) st
+      (yy594 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy695 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy696 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
-    | '\x80'..'\x8F' ->
+    | '\x8B'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xB0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy691 [@tailcall]) st
+      (yy594 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
         if (st.refill st) then (yy696 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
 and yy697 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xA5'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy594 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy697 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy698 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy594 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy698 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy699 (st : tokenizer_state) : token =
+  Buffer.reset st.info.strbuf; string_multiline st
+
+and yy700 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '"' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy729 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy700 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy701 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy645 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy701 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy702 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x8B'..'\x8D'
+    | '\x90'..'\xA7'
+    | '\xB0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy645 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy702 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy703 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9E'
+    | '\xA0'..'\xA5'
+    | '\xAA'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy645 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy703 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy704 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBE' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy645 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy704 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy705 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x84'
+    | '\x86'..'\x9F'
+    | '\xA1'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy705 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy706 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy663 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy706 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy707 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\xA0'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy706 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy707 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy708 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x99'
+    | '\x9B'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy706 [@tailcall]) st
+    | '\x9A' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy730 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy708 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy709 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy731 [@tailcall]) st
+    | '\x81' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy732 [@tailcall]) st
+    | '\x82'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy706 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy709 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy710 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy730 [@tailcall]) st
+    | '\x81'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy706 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy710 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy711 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy706 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy711 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy712 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x9F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy706 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy712 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy713 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBA'
+    | '\xBC'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy706 [@tailcall]) st
+    | '\xBB' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy733 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy713 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy714 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x90'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy711 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy714 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy715 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\xBF' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy711 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy715 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy716 (st : tokenizer_state) : token =
+  let yych = Bytes.unsafe_get st.yyinput st.yycursor in
+  match yych with
+    | '\x80'..'\x8F' ->
+      st.yycursor <- st.yycursor + 1;
+      (yy711 [@tailcall]) st
+    | _ ->
+      if (st.yylimit <= st.yycursor) then (
+        if (st.refill st) then (yy716 [@tailcall]) st
+        else (yy628 [@tailcall]) st
+      ) else (
+        (yy628 [@tailcall]) st
+      )
+
+and yy717 (st : tokenizer_state) : token =
   st.yyaccept <- 10;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -11246,81 +11626,81 @@ and yy697 (st : tokenizer_state) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | '0'..'9'
     | '_' ->
       st.yycursor <- st.yycursor + 1;
-      (yy697 [@tailcall]) st
+      (yy717 [@tailcall]) st
     | 'E'
     | 'e' ->
       st.yycursor <- st.yycursor + 1;
-      (yy652 [@tailcall]) st
+      (yy672 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy656 [@tailcall]) st
+      (yy676 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy658 [@tailcall]) st
+      (yy678 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy659 [@tailcall]) st
+      (yy679 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy660 [@tailcall]) st
+      (yy680 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy661 [@tailcall]) st
+      (yy681 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy663 [@tailcall]) st
+      (yy683 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy664 [@tailcall]) st
+      (yy684 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy665 [@tailcall]) st
+      (yy685 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy666 [@tailcall]) st
+      (yy686 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy667 [@tailcall]) st
+      (yy687 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy697 [@tailcall]) st
-        else (yy698 [@tailcall]) st
+        if (st.refill st) then (yy717 [@tailcall]) st
+        else (yy718 [@tailcall]) st
       ) else (
-        (yy698 [@tailcall]) st
+        (yy718 [@tailcall]) st
       )
 
-and yy698 (st : tokenizer_state) : token =
+and yy718 (st : tokenizer_state) : token =
   FLOAT (lexeme st)
 
-and yy699 (st : tokenizer_state) : token =
+and yy719 (st : tokenizer_state) : token =
   st.yyaccept <- 9;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x00' ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy699 [@tailcall]) st
-        else (yy650 [@tailcall]) st
+        if (st.refill st) then (yy719 [@tailcall]) st
+        else (yy670 [@tailcall]) st
       ) else (
-        (yy650 [@tailcall]) st
+        (yy670 [@tailcall]) st
       )
     | '0'..'9' ->
       st.yycursor <- st.yycursor + 1;
-      (yy700 [@tailcall]) st
-    | _ -> (yy649 [@tailcall]) st yych
+      (yy720 [@tailcall]) st
+    | _ -> (yy669 [@tailcall]) st yych
 
-and yy700 (st : tokenizer_state) : token =
+and yy720 (st : tokenizer_state) : token =
   st.yyaccept <- 10;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -11336,57 +11716,57 @@ and yy700 (st : tokenizer_state) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | '0'..'9'
     | '_' ->
       st.yycursor <- st.yycursor + 1;
-      (yy700 [@tailcall]) st
+      (yy720 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy656 [@tailcall]) st
+      (yy676 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy658 [@tailcall]) st
+      (yy678 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy659 [@tailcall]) st
+      (yy679 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy660 [@tailcall]) st
+      (yy680 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy661 [@tailcall]) st
+      (yy681 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy663 [@tailcall]) st
+      (yy683 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy664 [@tailcall]) st
+      (yy684 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy665 [@tailcall]) st
+      (yy685 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy666 [@tailcall]) st
+      (yy686 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy667 [@tailcall]) st
+      (yy687 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy700 [@tailcall]) st
-        else (yy698 [@tailcall]) st
+        if (st.refill st) then (yy720 [@tailcall]) st
+        else (yy718 [@tailcall]) st
       ) else (
-        (yy698 [@tailcall]) st
+        (yy718 [@tailcall]) st
       )
 
-and yy701 (st : tokenizer_state) : token =
+and yy721 (st : tokenizer_state) : token =
   st.yyaccept <- 4;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -11402,57 +11782,57 @@ and yy701 (st : tokenizer_state) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | '0'..'1'
     | '_' ->
       st.yycursor <- st.yycursor + 1;
-      (yy701 [@tailcall]) st
+      (yy721 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy656 [@tailcall]) st
+      (yy676 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy658 [@tailcall]) st
+      (yy678 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy659 [@tailcall]) st
+      (yy679 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy660 [@tailcall]) st
+      (yy680 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy661 [@tailcall]) st
+      (yy681 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy663 [@tailcall]) st
+      (yy683 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy664 [@tailcall]) st
+      (yy684 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy665 [@tailcall]) st
+      (yy685 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy666 [@tailcall]) st
+      (yy686 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy667 [@tailcall]) st
+      (yy687 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy701 [@tailcall]) st
-        else (yy586 [@tailcall]) st
+        if (st.refill st) then (yy721 [@tailcall]) st
+        else (yy606 [@tailcall]) st
       ) else (
-        (yy586 [@tailcall]) st
+        (yy606 [@tailcall]) st
       )
 
-and yy702 (st : tokenizer_state) : token =
+and yy722 (st : tokenizer_state) : token =
   st.yyaccept <- 4;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -11468,57 +11848,57 @@ and yy702 (st : tokenizer_state) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | '0'..'7'
     | '_' ->
       st.yycursor <- st.yycursor + 1;
-      (yy702 [@tailcall]) st
+      (yy722 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy656 [@tailcall]) st
+      (yy676 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy658 [@tailcall]) st
+      (yy678 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy659 [@tailcall]) st
+      (yy679 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy660 [@tailcall]) st
+      (yy680 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy661 [@tailcall]) st
+      (yy681 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy663 [@tailcall]) st
+      (yy683 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy664 [@tailcall]) st
+      (yy684 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy665 [@tailcall]) st
+      (yy685 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy666 [@tailcall]) st
+      (yy686 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy667 [@tailcall]) st
+      (yy687 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy702 [@tailcall]) st
-        else (yy586 [@tailcall]) st
+        if (st.refill st) then (yy722 [@tailcall]) st
+        else (yy606 [@tailcall]) st
       ) else (
-        (yy586 [@tailcall]) st
+        (yy606 [@tailcall]) st
       )
 
-and yy703 (st : tokenizer_state) : token =
+and yy723 (st : tokenizer_state) : token =
   st.yyaccept <- 4;
   st.yymarker <- st.yycursor;
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
@@ -11536,122 +11916,122 @@ and yy703 (st : tokenizer_state) : token =
     | '|'
     | '~' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | '0'..'9'
     | 'A'..'F'
     | '_'
     | 'a'..'f' ->
       st.yycursor <- st.yycursor + 1;
-      (yy703 [@tailcall]) st
+      (yy723 [@tailcall]) st
     | '\xC2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy656 [@tailcall]) st
+      (yy676 [@tailcall]) st
     | '\xC3'..'\xDF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy657 [@tailcall]) st
+      (yy677 [@tailcall]) st
     | '\xE0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy658 [@tailcall]) st
+      (yy678 [@tailcall]) st
     | '\xE1' ->
       st.yycursor <- st.yycursor + 1;
-      (yy659 [@tailcall]) st
+      (yy679 [@tailcall]) st
     | '\xE2' ->
       st.yycursor <- st.yycursor + 1;
-      (yy660 [@tailcall]) st
+      (yy680 [@tailcall]) st
     | '\xE3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy661 [@tailcall]) st
+      (yy681 [@tailcall]) st
     | '\xE4'..'\xEC'
     | '\xEE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy662 [@tailcall]) st
+      (yy682 [@tailcall]) st
     | '\xED' ->
       st.yycursor <- st.yycursor + 1;
-      (yy663 [@tailcall]) st
+      (yy683 [@tailcall]) st
     | '\xEF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy664 [@tailcall]) st
+      (yy684 [@tailcall]) st
     | '\xF0' ->
       st.yycursor <- st.yycursor + 1;
-      (yy665 [@tailcall]) st
+      (yy685 [@tailcall]) st
     | '\xF1'..'\xF3' ->
       st.yycursor <- st.yycursor + 1;
-      (yy666 [@tailcall]) st
+      (yy686 [@tailcall]) st
     | '\xF4' ->
       st.yycursor <- st.yycursor + 1;
-      (yy667 [@tailcall]) st
+      (yy687 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy703 [@tailcall]) st
-        else (yy586 [@tailcall]) st
+        if (st.refill st) then (yy723 [@tailcall]) st
+        else (yy606 [@tailcall]) st
       ) else (
-        (yy586 [@tailcall]) st
+        (yy606 [@tailcall]) st
       )
 
-and yy704 (st : tokenizer_state) : token =
+and yy724 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy704 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy724 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy705 (st : tokenizer_state) : token =
+and yy725 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x8B'..'\x8D'
     | '\x90'..'\xA7'
     | '\xB0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy705 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy725 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy706 (st : tokenizer_state) : token =
+and yy726 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xA5'
     | '\xAA'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy706 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy726 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy707 (st : tokenizer_state) : token =
+and yy727 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy648 [@tailcall]) st
+      (yy668 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy707 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy727 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy708 (st : tokenizer_state) : token =
+and yy728 (st : tokenizer_state) : token =
   BOM
 
-and yy709 (st : tokenizer_state) : token =
+and yy729 (st : tokenizer_state) : token =
   st.t1 <- st.yycursor;
   st.t1 <- st.t1 - 3;
   
@@ -11660,71 +12040,71 @@ and yy709 (st : tokenizer_state) : token =
     raw_string_multiline st hashlen
 
 
-and yy710 (st : tokenizer_state) : token =
+and yy730 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x81'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy643 [@tailcall]) st
+      (yy663 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy710 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy730 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy711 (st : tokenizer_state) : token =
+and yy731 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x8B'..'\x8D'
     | '\x90'..'\xA7'
     | '\xB0'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy643 [@tailcall]) st
+      (yy663 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy711 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy731 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy712 (st : tokenizer_state) : token =
+and yy732 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\x9E'
     | '\xA0'..'\xA5'
     | '\xAA'..'\xBF' ->
       st.yycursor <- st.yycursor + 1;
-      (yy643 [@tailcall]) st
+      (yy663 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy712 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy732 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy713 (st : tokenizer_state) : token =
+and yy733 (st : tokenizer_state) : token =
   let yych = Bytes.unsafe_get st.yyinput st.yycursor in
   match yych with
     | '\x80'..'\xBE' ->
       st.yycursor <- st.yycursor + 1;
-      (yy643 [@tailcall]) st
+      (yy663 [@tailcall]) st
     | _ ->
       if (st.yylimit <= st.yycursor) then (
-        if (st.refill st) then (yy713 [@tailcall]) st
-        else (yy608 [@tailcall]) st
+        if (st.refill st) then (yy733 [@tailcall]) st
+        else (yy628 [@tailcall]) st
       ) else (
-        (yy608 [@tailcall]) st
+        (yy628 [@tailcall]) st
       )
 
-and yy714 (st : tokenizer_state) : token =
+and yy734 (st : tokenizer_state) : token =
   EOF
 
 and main (st : tokenizer_state) : token =
-  (yy565 [@tailcall]) st
+  (yy585 [@tailcall]) st
 
 
 
