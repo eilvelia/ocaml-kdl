@@ -52,15 +52,8 @@ document: BOM? xs=nodes EOF { xs } ;
 
 nodes:
   | NEWLINE* { [] }
-  | NEWLINE* x=node EOF { cons_if_some x [] }
-  | NEWLINE* x=node ";" xs=nodes { cons_if_some x xs }
   | NEWLINE* x=node NEWLINE xs=nodes { cons_if_some x xs }
-;
-
-children_nodes:
-  | NEWLINE* { [] }
-  | NEWLINE* x=node ";" xs=children_nodes { cons_if_some x xs }
-  | NEWLINE* x=node NEWLINE xs=children_nodes { cons_if_some x xs }
+  | NEWLINE* x=node ";" xs=nodes { cons_if_some x xs }
   | NEWLINE* x=node { cons_if_some x [] }
 ;
 
@@ -177,6 +170,4 @@ type_annot:
   | "(" _x=error { error $loc(_x) "Expected a type annotation name" }
 ;
 
-children:
-  | "{" xs=children_nodes "}" { xs }
-;
+children: "{" xs=nodes "}" { xs } ;
