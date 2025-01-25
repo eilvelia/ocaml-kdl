@@ -324,7 +324,7 @@ let rollback_start_to_newline st =
   // Used in pretty-printing
   re2c:YYFN = ["escape_string;string", "st;simple_state", "strbuf;Buffer.t"];
 
-  ^ { st.yystart <- st.yycursor; }
+  !entry { st.yystart <- st.yycursor; }
   [\n] { Buffer.add_string strbuf "\\n"; escape_string st strbuf }
   [\r] { Buffer.add_string strbuf "\\r"; escape_string st strbuf }
   [\t] { Buffer.add_string strbuf "\\t"; escape_string st strbuf }
@@ -358,7 +358,7 @@ let escape_string = function
 (* Tokenizer *)
 
 %{rules:tokenizer_base
-  ^ { save_start_position st; }
+  !entry { save_start_position st; }
   * { malformed_utf8 st }
 %}
 
@@ -493,7 +493,7 @@ let multiline_contents strbuf =
 %{local
   re2c:YYFN = ["string;token", "st;tokenizer_state", "prefix;string"];
 
-  <single, multi> ^ { save_start_position st; }
+  <single, multi> !entry { save_start_position st; }
   <multi> newline @t1 ws? / newline {
     newline ~pos:st.t1 st;
     (* Any newline is normalized to \n *)
@@ -566,7 +566,7 @@ let check_hashlen st exp_hashlen =
                "exp_hashlen;int",
                "prefix;string"];
 
-  <rsingle, rmulti> ^ { save_start_position st; }
+  <rsingle, rmulti> !entry { save_start_position st; }
   <rmulti> newline @t1 ws? / newline {
     newline ~pos:st.t1 st;
     Buffer.add_char st.info.strbuf '\n';
@@ -609,7 +609,7 @@ let raw_string_singleline st exp_hashlen =
   re2c:YYFN = ["main;token", "st;tokenizer_state"];
 
   !use:tokenizer_base;
-  ^ { save_token_position st; save_start_position st; }
+  !entry { save_token_position st; save_start_position st; }
   ws { main st }
   newline { newline st; NEWLINE }
   "//" { singleline_comment st; NEWLINE }

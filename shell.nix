@@ -17,8 +17,8 @@ pkgs.mkShell {
       src = fetchFromGitHub {
         owner = "skvadrik";
         repo = "re2c";
-        rev = "4fedb068c14c6a7aca023080ab90881af6688ce0";
-        hash = "sha256-NgwSUqnCbSNuYJcWvgILhEcf+N0jA4DUNs6QJ4/ORZ0=";
+        rev = "0e97d4917bcbdb8645cca2288c010b19c959278f";
+        hash = "sha256-q7Y68MfUrQZDM1bKleqgOD/P3R7WJY6jjXwFLBiX0V8=";
       };
     })
   ];
