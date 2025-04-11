@@ -12,13 +12,13 @@ pkgs.mkShell {
     ocamlPackages.utop
     ocamlPackages.zarith
 
-    # Use an unreleased version of re2c
-    (re2c.overrideAttrs {
+    (re2c.overrideAttrs rec {
+      version = "4.1";
       src = fetchFromGitHub {
         owner = "skvadrik";
         repo = "re2c";
-        rev = "0e97d4917bcbdb8645cca2288c010b19c959278f";
-        hash = "sha256-q7Y68MfUrQZDM1bKleqgOD/P3R7WJY6jjXwFLBiX0V8=";
+        tag = version;
+        hash = "sha256-xB4oH0QS0VKTK2we+wdylS8VBijpp6tv7YV7fIX1s4A=";
       };
     })
   ];

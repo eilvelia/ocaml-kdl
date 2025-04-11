@@ -2,7 +2,7 @@
 dune-build:
 	dune build @install
 
-# Requires re2c >= 4.0.2-4fedb068c14c6a7aca023080ab90881af6688ce0 to be installed
+# Requires re2c >= 4.1 to be installed
 src/lexer.ml: src/lexer.ml.re
 	re2ocaml -W -Wno-nondeterministic-tags --no-generation-date \
 		--conditions -i $< -o $@
