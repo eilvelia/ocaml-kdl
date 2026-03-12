@@ -1,5 +1,12 @@
 # Changelog
 
+## UNRELEASED
+
+- Fixed a token's `pos_bol` being zero.
+- Fixed `equal_node` not taking children into account.
+- Fixed `pp_node_compact` outputting invalid KDL.
+- Fixed a bug in lexer's buffer refilling.
+
 ## 0.2.0 (2024-12-27)
 
 - Updated to KDL v2.0 (many breaking changes, see the KDL changelog).
