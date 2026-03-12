@@ -156,7 +156,7 @@ let save_start_position st =
 let save_token_position st =
   st.info.token_cnum <- st.yycursor;
   st.info.token_lnum <- st.info.lnum;
-  st.info.start_bol <- st.info.bol
+  st.info.token_bol <- st.info.bol
 [@@inline]
 
 let make_lexing_token_pos st =

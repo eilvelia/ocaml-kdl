@@ -271,11 +271,12 @@ let equal_annot_value (annot1, v1 : annot_value) (annot2, v2 : annot_value) =
 let equal_prop (name1, annot_value1 : prop) (name2, annot_value2 : prop) =
   String.equal name1 name2 && equal_annot_value annot_value1 annot_value2
 
-let equal_node n1 n2 =
+let rec equal_node n1 n2 =
   String.equal n1.name n2.name
   && Option.equal String.equal n1.annot n2.annot
   && List.equal equal_annot_value n1.args n2.args
   && List.equal equal_prop n1.props n2.props
+  && List.equal equal_node n1.children n2.children
 
 let equal nodes1 nodes2 = List.equal equal_node nodes1 nodes2
 
