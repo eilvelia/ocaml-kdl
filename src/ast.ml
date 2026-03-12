@@ -104,7 +104,7 @@ module Num = struct
       | _ -> None
 
   let to_int32 : [< t ] -> int32 option = function
-    | `Int int when Sys.int_size > 32 && int > Int32.to_int Int32.max_int ->
+    | `Int int when Sys.int_size > 32 && (int > Int32.to_int Int32.max_int || int < Int32.to_int Int32.min_int) ->
       None
     | `Int int -> Some (Int32.of_int int)
     | `Int_raw str -> Int32.of_string_opt str
