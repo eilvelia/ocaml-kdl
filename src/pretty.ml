@@ -75,7 +75,7 @@ let rec pp_node_compact fmt n =
   pp_entity_list pp_prop fmt n.props;
   match n.children with
   | _ :: _ as children ->
-    Format.pp_print_string fmt "{";
+    Format.pp_print_string fmt " {";
     pp_nodes_compact fmt children;
     Format.pp_print_string fmt "}"
   | [] -> ()
