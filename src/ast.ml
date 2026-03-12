@@ -228,9 +228,9 @@ module Num = struct
       | Some f -> Int.equal (Float.to_int f) i
       | None -> false)
     | `Int_raw ilit, `Float_raw d | `Float_raw d, `Int_raw ilit ->
-      (match safe_int_float_of_string d with
-      | Some f -> String.equal (Float.to_string f) ilit
-      | None -> false)
+      (match safe_int_float_of_string d, signed_int_of_string_opt ilit with
+      | Some f, Some i -> Int.equal (Float.to_int f) i
+      | _ -> false)
 end
 
 type number = Num.t
