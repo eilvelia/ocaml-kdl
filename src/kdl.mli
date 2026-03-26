@@ -17,16 +17,16 @@ module Num : sig
     | `Float_raw of string ]
   (** Numeric KDL value.
 
-      Although the KDL spec does not differentiate integers and floats, a number
-      is parsed as [`Float_raw] (stored as string) if it is written in the [e]
-      scientific notation or contains the [.] decimal separator. If an integer
-      is too large for the OCaml [int], it is parsed as [`Int_raw] instead of
-      [`Int]. The strings are not normalized in any way. [`Float_raw] also
-      includes special values: ["inf"], ["-inf"], ["nan"].
+      Although the KDL spec does not differentiate integers and floats, a
+      number is parsed as [`Float_raw] (stored as string) if it is written in
+      [e] scientific notation or contains the [.] decimal separator. If an
+      integer is too large for the OCaml [int], it is parsed as [`Int_raw]
+      instead of [`Int]. The strings are not normalized in any way.
+      [`Float_raw] also includes special values: ["inf"], ["-inf"], ["nan"].
 
-      In general, one should not pattern match over specific constructors of the
-      variant, and instead use the [to_*] functions below while matching over
-      [#Kdl.number as num]. *)
+      In general, one should not pattern match over specific constructors of
+      the variant, and instead use the [to_*] functions below while matching
+      over [#Kdl.number as num]. *)
 
   val to_string : [< t ] -> string
   (** Convert the number to [string]. *)
@@ -34,7 +34,7 @@ module Num : sig
   val to_float : [< t ] -> float
   (** Convert the number to [float], potentially losing precision.
 
-      [Failure] might be raised in case [`Int_raw] or [`Float_raw] contain an
+      [Failure] may be raised in case [`Int_raw] or [`Float_raw] contain an
       invalid literal, which should not happen if they were constructed by the
       parsing functions. *)
 
@@ -116,7 +116,7 @@ type prop = string * annot_value
 
 (** A KDL node. Nodes consist of the node name, optional type annotation,
     ordered arguments (values), unordered properties (a key-value map), and
-    children nodes.
+    child nodes.
 
     [props] is an association list; the order of the list is unspecified. *)
 type node =
@@ -132,17 +132,17 @@ type t = node list
 (** {1 Parsing} *)
 
 type error_loc = Lexing.position * Lexing.position
-(** The error location in bytes. *)
+(** A pair of start and end positions in bytes. *)
 
 type error = string * error_loc
-(** A parsing error: pair of the error message and error location. *)
+(** A parsing error: a pair of the error message and error location. *)
 
 val pp_error : Format.formatter -> error -> unit
 
 exception Parse_error of error
 
 val of_string : ?fname:string -> string -> (t, error) result
-(** Parse KDL from a string. The string should be UTF8-encoded. [?fname] is
+(** Parse KDL from a string. The string should be UTF-8-encoded. [?fname] is
     an optional filename that is used in locations. *)
 
 val of_string_exn : ?fname:string -> string -> t
@@ -160,10 +160,10 @@ val of_channel_exn : ?fname:string -> in_channel -> t
 
 val of_chunk_gen : ?fname:string -> (bytes -> offset:int -> len:int -> int) -> (t, error) result
 (** [of_chunk_gen ?fname f] is an advanced function that parses KDL from byte
-    chunks written by [f]. The function [f] is similar to
-    {!In_channel.input}; [f] must write no more than [~len] bytes at offset
-    [~offset], returning the amount of written bytes. A return value of 0 means
-    end of input. See also {!Lexing.from_function}. *)
+    chunks written by [f]. The function [f] is similar to {!In_channel.input};
+    [f] must write no more than [~len] bytes at offset [~offset], returning the
+    number of written bytes. A return value of 0 means end of input. See also
+    {!Lexing.from_function}. *)
 
 val of_chunk_gen_exn : ?fname:string -> (bytes -> offset:int -> len:int -> int) -> t
 (** Raising version of [of_chunk_gen].
@@ -227,15 +227,15 @@ val pp_prop : Format.formatter -> prop -> unit
 (** Pretty-print a property. *)
 
 val pp_node : Format.formatter -> node -> unit
-(** Pretty-print a node using [!indent] as the indentation width for children
+(** Pretty-print a node using [!indent] as the indentation width for child
     nodes. *)
 
 val pp_node_compact : Format.formatter -> node -> unit
 (** Same as {!pp_node}, but outputs the result in a single line. *)
 
 val pp : Format.formatter -> t -> unit
-(** Pretty-print a list of nodes or a KDL document using [!indent] as the
-    indentation width for children nodes. *)
+(** Pretty-print a KDL document (that is, a list of nodes) using [!indent] as
+    the indentation width for child nodes. *)
 
 val pp_compact : Format.formatter -> t -> unit
 (** Same as {!pp}, but outputs the result in a single line. *)
@@ -294,18 +294,18 @@ val interpret : annot_value -> [> typed_value ]
 
     Note: [f32] is currently the same as [f64].
 
-    @raise Invalid_annotation if the value is invalid. For example, if the value
-    is annotated as "u8" but exceeds the range of u8, [Invalid_annotation] is
-    raised. *)
+    @raise Invalid_annotation if the value is invalid. For example, if the
+    value is annotated as [(u8]) but exceeds the range of [u8],
+    [Invalid_annotation] is raised. *)
 
 val pp_typed_value : Format.formatter -> [< typed_value ] -> unit
 
 (** {1 Lenses} *)
 
 module L : sig
-  (** Basic partial "lenses" for accessing deeply-nested KDL structures.
+  (** Basic partial "lenses" for accessing deeply nested KDL structures.
 
-      Note: These lenses are mostly meant to be used for getting, [set] is
+      Note: These lenses are mostly meant to be used for getting; [set] is
       generally inefficient. *)
 
   type ('s, 'a) lens =
@@ -393,7 +393,7 @@ module L : sig
       narrowed by passing [?annot]. *)
 
   val node_many : ?annot:string -> string -> (node list, node list) lens
-  (** Same as {!val:node}, but returns all possible matches. *)
+  (** Same as {!val:node}, but returns all matching nodes. *)
 
   val node_nth : int -> (node list, node) lens
   (** Lens to the [n]-th node in a list, starting at 0. *)
