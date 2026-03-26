@@ -29,17 +29,17 @@ module Num : sig
       over [#Kdl.number as num]. *)
 
   val to_string : [< t ] -> string
-  (** Convert the number to [string]. *)
+  (** Convert a KDL number to [string]. *)
 
   val to_float : [< t ] -> float
-  (** Convert the number to [float], potentially losing precision.
+  (** Convert a KDL number to [float], potentially losing precision.
 
       [Failure] may be raised in case [`Int_raw] or [`Float_raw] contain an
       invalid literal, which should not happen if they were constructed by the
       parsing functions. *)
 
   val to_int : [< t ] -> int option
-  (** Convert the number to [int]. Results in [None] if [`Int_raw] or
+  (** Convert a KDL number to [int]. Results in [None] if [`Int_raw] or
       [`Float_raw] are invalid literals or do not fit in [int], or if
       [`Float_raw] is not a whole number. [`Float_raw str] is parsed as a
       [float] that must be in the [[-(2^53-1), (2^53-1)]] interval. *)
@@ -49,21 +49,21 @@ module Num : sig
       @raise Failure *)
 
   val to_int32 : [< t ] -> int32 option
-  (** Convert the number to [int32]. The [to_int] semantics apply. *)
+  (** Convert a KDL number to [int32]. The [to_int] semantics apply. *)
 
   val to_int32_exn : [< t ] -> int32
   (** Raising version of [to_int32].
       @raise Failure *)
 
   val to_int64 : [< t ] -> int64 option
-  (** Convert the number to [int64]. The [to_int] semantics apply. *)
+  (** Convert a KDL number to [int64]. The [to_int] semantics apply. *)
 
   val to_int64_exn : [< t ] -> int64
   (** Raising version of [to_int64].
       @raise Failure *)
 
   val to_nativeint : [< t ] -> nativeint option
-  (** Convert the number to [nativeint]. The [to_int] semantics apply. *)
+  (** Convert a KDL number to [nativeint]. The [to_int] semantics apply. *)
 
   val to_nativeint_exn : [< t ] -> nativeint
   (** Raising version of [to_nativeint].
@@ -82,14 +82,20 @@ module Num : sig
   (** Unsigned version of the [to_nativeint] conversion. *)
 
   val of_float : float -> [> t ]
+  (** Convert a [float] to a KDL number. Whole floats that fit in [int] are
+      converted to [`Int]. *)
 
   val of_int : int -> [> t ]
+  (** Convert an [int] to a KDL number. *)
 
   val of_int32 : int32 -> [> t ]
+  (** Convert an [int32] to a KDL number. *)
 
   val of_int64 : int64 -> [> t ]
+  (** Convert an [int64] to a KDL number. *)
 
   val of_nativeint : nativeint -> [> t ]
+  (** Convert a [nativeint] to a KDL number. *)
 
   val equal : [< t ] -> [< t ] -> bool
   (** Check whether two number values are equal structurally. Note that the
