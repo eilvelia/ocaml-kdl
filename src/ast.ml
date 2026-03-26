@@ -285,9 +285,8 @@ let sexp_of_value : [< value ] -> Sexp.t = function
   | #number as num ->
     let tag =
       match num with
-      | `Int _ -> "int"
-      | `Int_raw _ -> "int-raw"
-      | `Float_raw _ -> "float-raw" in
+      | `Int _ | `Int_raw _ -> "int"
+      | `Float_raw _ -> "float" in
     Sexp.List [Atom (Printf.sprintf "number-%s" tag); Atom (Num.to_string num)]
   | `Bool true -> Sexp.List [Atom "bool"; Atom "true"]
   | `Bool false -> Sexp.List [Atom "bool"; Atom "false"]

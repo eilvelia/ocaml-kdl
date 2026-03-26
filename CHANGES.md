@@ -7,6 +7,7 @@
 - Fixed `equal_node` not taking children into account.
 - Fixed `pp_node_compact` outputting invalid KDL.
 - Fixed a bug in lexer's buffer refilling.
+- Sexp conversion now produces `number-int` and `number-float` for numbers.
 
 ## 0.2.0 (2024-12-27)
 

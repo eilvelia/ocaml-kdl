@@ -340,7 +340,7 @@ let%test_module "numbers" = (module struct
 
   let%expect_test "a large integer" =
     test {|node 12351823951203598125123512041234935|};
-    [%expect {| (node (number-int-raw 12351823951203598125123512041234935)) |}]
+    [%expect {| (node (number-int 12351823951203598125123512041234935)) |}]
 
   let%expect_test "underscore separators" =
     test {|node 93_33__43_|};
@@ -353,8 +353,8 @@ let%test_module "numbers" = (module struct
   let%expect_test "float literals" =
     test {|node 3.14; node 3___14_.0_01_; node -5.2|};
     [%expect {|
-      ((node (number-float-raw 3.14)) (node (number-float-raw 3___14_.0_01_))
-       (node (number-float-raw -5.2)))
+      ((node (number-float 3.14)) (node (number-float 3___14_.0_01_))
+       (node (number-float -5.2)))
       |}]
 
   let%expect_test "the underscore just after the decimal separator is not allowed" =
@@ -364,9 +364,8 @@ let%test_module "numbers" = (module struct
   let%expect_test "the E notation" =
     test {|a 32e7; b 3e+3; c 2e-3; d 3.43e+4; e -3E2|};
     [%expect {|
-      ((a (number-float-raw 32e7)) (b (number-float-raw 3e+3))
-       (c (number-float-raw 2e-3)) (d (number-float-raw 3.43e+4))
-       (e (number-float-raw -3E2)))
+      ((a (number-float 32e7)) (b (number-float 3e+3)) (c (number-float 2e-3))
+       (d (number-float 3.43e+4)) (e (number-float -3E2)))
       |}]
 
   let%expect_test "hexadecimal prefix" =
@@ -402,13 +401,13 @@ let%test_module "numbers" = (module struct
   let%expect_test "special #inf and #-inf numbers" =
     test {|- a=#inf b=#-inf c=3 #inf|};
     [%expect {|
-      (- (number-float-raw inf) (prop a (number-float-raw inf))
-       (prop b (number-float-raw -inf)) (prop c (number-int 3)))
+      (- (number-float inf) (prop a (number-float inf))
+       (prop b (number-float -inf)) (prop c (number-int 3)))
       |}]
 
   let%expect_test "special #nan number" =
     test {|- #nan a=#nan|};
-    [%expect {| (- (number-float-raw nan) (prop a (number-float-raw nan))) |}]
+    [%expect {| (- (number-float nan) (prop a (number-float nan))) |}]
 end)
 
 let%test_module "strings" = (module struct
@@ -693,7 +692,7 @@ let%expect_test "the type annotations example" =
   |};
   [%expect {|
     (numbers (number-int 10 u8) (number-int 20 i32)
-     (prop myfloat (number-float-raw 1.5 f32))
+     (prop myfloat (number-float 1.5 f32))
      (children
       (strings (string 123e4567-e89b-12d3-a456-426614174000 uuid)
        (string 2021-02-03 date) (prop filter (string "$\\d+" regex)))
