@@ -157,7 +157,7 @@ let prop key = {
   get = (fun node -> List.assoc_opt key node.props);
   set = (fun v' node ->
     let found = ref false in
-    let f (k, v) = if k = key then (found := true; k, v') else k, v in
+    let f (k, v) = if String.equal k key then (found := true; k, v') else k, v in
     let props = List.map f node.props in
     if !found then Some { node with props } else None
   )
