@@ -96,3 +96,24 @@ let to_string t =
   pp fmt t;
   Format.pp_print_flush fmt ();
   Buffer.contents buf
+
+let to_string_compact t =
+  let buf = Buffer.create 512 in
+  let fmt = Format.formatter_of_buffer buf in
+  pp_compact fmt t;
+  Format.pp_print_flush fmt ();
+  Buffer.contents buf
+
+let node_to_string n =
+  let buf = Buffer.create 256 in
+  let fmt = Format.formatter_of_buffer buf in
+  pp_node fmt n;
+  Format.pp_print_flush fmt ();
+  Buffer.contents buf
+
+let node_to_string_compact n =
+  let buf = Buffer.create 256 in
+  let fmt = Format.formatter_of_buffer buf in
+  pp_node_compact fmt n;
+  Format.pp_print_flush fmt ();
+  Buffer.contents buf

@@ -241,6 +241,15 @@ val pp_compact : Format.formatter -> t -> unit
 val to_string : t -> string
 (** Pretty-print a KDL document into a string using {!pp}. *)
 
+val to_string_compact : t -> string
+(** Pretty-print a KDL document into a string using {!pp_compact}. *)
+
+val node_to_string : node -> string
+(** Pretty-print a node into a string using {!pp_node}. *)
+
+val node_to_string_compact : node -> string
+(** Pretty-print a node into a string using {!pp_node_compact}. *)
+
 (** {1:annots Type annotations} *)
 
 (** KDL {{:https://github.com/kdl-org/kdl/blob/2.0.0/SPEC.md#type-annotation} defines}
