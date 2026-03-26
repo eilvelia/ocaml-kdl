@@ -219,18 +219,12 @@ module Num = struct
   let equal (x : [< t ]) (y : [< t ]) =
     match x, y with
     | `Int i1, `Int i2 -> Int.equal i1 i2
-    (* The strings are not necessarily normalized *)
-    | `Int_raw s1, `Int_raw s2 -> String.equal s1 s2
-    | `Float_raw d1, `Float_raw d2 -> String.equal d1 d2
-    | `Int i, `Int_raw s | `Int_raw s, `Int i -> String.equal (Int.to_string i) s
-    | `Int i, `Float_raw d | `Float_raw d, `Int i ->
-      (match safe_int_float_of_string d with
-      | Some f -> Int.equal (Float.to_int f) i
-      | None -> false)
-    | `Int_raw ilit, `Float_raw d | `Float_raw d, `Int_raw ilit ->
-      (match safe_int_float_of_string d, signed_int_of_string_opt ilit with
-      | Some f, Some i -> Int.equal (Float.to_int f) i
-      | _ -> false)
+    | `Int_raw s1, `Int_raw s2
+    | `Float_raw s1, `Float_raw s2 ->
+      String.equal s1 s2
+    | `Int _, (`Int_raw _ | `Float_raw _)
+    | `Int_raw _, (`Int _ | `Float_raw _)
+    | `Float_raw _, (`Int _ | `Int_raw _) -> false
 end
 
 type number = Num.t

@@ -3,6 +3,7 @@
 ## UNRELEASED
 
 - Added `Kdl.{to_string_compact,node_to_string,node_to_string_compact}`.
+- Simplified the semantics of `Kdl.Num.equal`.
 - Fixed a token's `pos_bol` being zero.
 - Fixed `equal_node` not taking children into account.
 - Fixed `pp_node_compact` outputting invalid KDL.

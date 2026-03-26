@@ -92,7 +92,9 @@ module Num : sig
   val of_nativeint : nativeint -> [> t ]
 
   val equal : [< t ] -> [< t ] -> bool
-  (** Note that number values may not necessarily be normalized. *)
+  (** Check whether two number values are equal structurally. Note that the
+      values are not necessarily normalized, so, for example, [`Int_raw "0xff"]
+      and [`Int_raw "255"] are not equal. *)
 end
 
 type number = Num.t
