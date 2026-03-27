@@ -92,6 +92,8 @@ Additionaly, type-annotated values can be "interpreted":
 - : [> Kdl.typed_value ] = `U8 220
 ```
 
+This library can also parse KDLv1 but cannot do any other things with it.
+
 For the full list of available functions, see the [mli][] file.
 
 [mli]: src/kdl.mli

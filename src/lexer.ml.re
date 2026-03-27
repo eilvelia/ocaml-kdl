@@ -1,4 +1,4 @@
-(* $ make generate-re2c *)
+(* $ make src/lexer.ml *)
 (* vim: set filetype=ocaml: *)
 
 open Parser
@@ -52,6 +52,9 @@ type tokenizer_info = {
   (* filename *)
   fname : string;
 
+  (* KDL v1 compatibility mode *)
+  v1 : bool;
+
   (* below, *lnum and *bol positions are absolute, whereas token_cnum (similar
      to yystart and yycursor) is relative to the current buffer *)
 
@@ -72,9 +75,10 @@ type tokenizer_info = {
   strbuf : Buffer.t;
 }
 
-let make_tokenizer_info ?(fname = "") () =
+let make_tokenizer_info ?(v1 = false) ?(fname = "") () =
   {
     fname;
+    v1;
     lnum = 1;
     bol = 0;
     start_lnum = 1;
@@ -126,21 +130,25 @@ let make_refiller f =
     end
   in refill
 
-let tokenizer_state_of_string ?fname str =
-  state_of_string ~info:(make_tokenizer_info ?fname ()) str
+let v1_of_compat = function Some `V1 -> true | None -> false
 
-let tokenizer_state_of_fun ?fname f =
+let tokenizer_state_of_string ?compat ?fname str =
+  let v1 = v1_of_compat compat in
+  state_of_string ~info:(make_tokenizer_info ~v1 ?fname ()) str
+
+let tokenizer_state_of_fun ?compat ?fname f =
+  let v1 = v1_of_compat compat in
   let len = 2048 in
   let refill = make_refiller f in
   let initial_buf = Bytes.create len in
   (* read initial chunk *)
   let limit = f initial_buf ~offset:0 ~len in
   if limit < len then Bytes.unsafe_set initial_buf limit '\x00';
-  make_state ~info:(make_tokenizer_info ?fname ()) ~refill ~limit initial_buf
+  make_state ~info:(make_tokenizer_info ~v1 ?fname ()) ~refill ~limit initial_buf
 
-let tokenizer_state_of_channel ?fname ch =
+let tokenizer_state_of_channel ?compat ?fname ch =
   let f buf ~offset ~len = input ch buf offset len in
-  tokenizer_state_of_fun ?fname f
+  tokenizer_state_of_fun ?compat ?fname f
 
 let newline ?(pos = -2) st =
   let bol = if pos >= 0 then pos else st.yycursor in
@@ -292,6 +300,8 @@ let rollback_start_to_newline st =
   ;
   identchar = [^] \ nonident_char;
   startident = identchar \ [0-9];
+  v1_identchar = identchar | [#];
+  v1_startident = v1_identchar \ [0-9];
 %}
 
 %{local
@@ -506,7 +516,14 @@ let multiline_contents strbuf =
     yyfnmulti st prefix
   }
   <multi> newline { newline st; yyfnmulti st prefix }
-  <single> newline { newline st; error st "Unterminated string" }
+  <single> newline {
+    newline st;
+    if st.info.v1 then begin
+      Buffer.add_char st.info.strbuf '\n';
+      yyfnsingle st prefix
+    end else
+      error st "Unterminated string"
+  }
   <single, multi> "\\n" { Buffer.add_char st.info.strbuf '\n'; string st prefix }
   <single, multi> "\\r" { Buffer.add_char st.info.strbuf '\r'; string st prefix }
   <single, multi> "\\t" { Buffer.add_char st.info.strbuf '\t'; string st prefix }
@@ -531,6 +548,13 @@ let multiline_contents strbuf =
     newline st;
     whitespace_escape st;
     string st prefix
+  }
+  <single, multi> "\\/" {
+    if st.info.v1 then begin
+      Buffer.add_char st.info.strbuf '/';
+      string st prefix
+    end else
+      error st "Invalid escape sequence"
   }
   <single, multi> [\\] [^] { error st "Invalid escape sequence" }
   <multi> "\"\"\"" { QUOTED_STRING (multiline_contents st.info.strbuf) }
@@ -577,7 +601,14 @@ let check_hashlen st exp_hashlen =
     yyfnrmulti st exp_hashlen prefix
   }
   <rmulti> newline { newline st; yyfnrmulti st exp_hashlen prefix }
-  <rsingle> newline { newline st; error st "Unterminated raw string" }
+  <rsingle> newline {
+    newline st;
+    if st.info.v1 then begin
+      Buffer.add_char st.info.strbuf '\n';
+      yyfnrsingle st exp_hashlen prefix
+    end else
+      error st "Unterminated raw string"
+  }
   <rmulti> "\"\"\"" @t1 [#]+ {
     if check_hashlen st exp_hashlen then begin
       RAW_STRING (multiline_contents st.info.strbuf)
@@ -587,6 +618,14 @@ let check_hashlen st exp_hashlen =
     if check_hashlen st exp_hashlen then
       RAW_STRING (Buffer.contents st.info.strbuf)
     else yyfnrsingle st exp_hashlen prefix
+  }
+  <rsingle> "\"" {
+    if st.info.v1 && exp_hashlen = 0 then
+      RAW_STRING (Buffer.contents st.info.strbuf)
+    else begin
+      add_lexeme_to_buf st st.info.strbuf;
+      yyfnrsingle st exp_hashlen prefix
+    end
   }
   <rsingle, rmulti> disallowed_char { error st "Illegal character" }
   <rmulti> any { add_lexeme_to_buf st st.info.strbuf; yyfnrmulti st exp_hashlen prefix }
@@ -623,20 +662,9 @@ let raw_string_singleline st exp_hashlen =
   "}" { RBRACE }
   "=" { EQ }
   [\uFEFF] { BOM }
-  "#" identchar+ {
-    begin match lexeme st with
-    | "#true" -> TRUE
-    | "#false" -> FALSE
-    | "#null" -> NULL
-    | "#inf" -> FLOAT "inf"
-    | "#-inf" -> FLOAT "-inf"
-    | "#nan" -> FLOAT "nan"
-    | k -> error st ("Unknown keyword " ^ k)
-    end
-  }
   integer { INTEGER (lexeme st) }
   float { FLOAT (lexeme st) }
-  (integer | float) identchar+ {
+  (integer | float) v1_identchar+ {
     error st @@ sprintf "Invalid number literal %s" (lexeme st)
   }
   [#]+ @t1 "\"\"\"" {
@@ -649,13 +677,42 @@ let raw_string_singleline st exp_hashlen =
     Buffer.reset st.info.strbuf;
     raw_string_singleline st hashlen
   }
+  "r" [#]* @t1 "\"" {
+    if st.info.v1 then begin
+      let hashlen = st.t1 - st.yystart - 1 in
+      Buffer.reset st.info.strbuf;
+      raw_string_singleline st hashlen
+    end else
+      error st "r-prefixed strings are invalid in KDL >= v2"
+  }
   "\"\"\"" { Buffer.reset st.info.strbuf; string_multiline st }
   "\"" { Buffer.reset st.info.strbuf; string_singleline st }
-  sign? "." [0-9] identchar* {
+  sign? "." [0-9] v1_identchar* {
     error st "Number-like identifiers are invalid and must be quoted"
   }
-  sign (startident identchar*)? | (startident \ sign) identchar* {
-    IDENT_STRING (lexeme st)
+  sign (v1_startident v1_identchar*)? | (v1_startident \ sign) v1_identchar* {
+    let lex = lexeme st in
+    if st.info.v1 then
+      match lex with
+      | "true" -> TRUE
+      | "false" -> FALSE
+      | "null" -> NULL
+      | "inf" | "-inf" | "nan" -> QUOTED_STRING lex
+      | _ -> IDENT_STRING lex
+    else if lex.[0] = '#' then
+      match lex with
+      | "#true" -> TRUE
+      | "#false" -> FALSE
+      | "#null" -> NULL
+      | "#inf" -> FLOAT "inf"
+      | "#-inf" -> FLOAT "-inf"
+      | "#nan" -> FLOAT "nan"
+      | k -> error st ("Unknown keyword " ^ k)
+    else if String.contains lex '#' then
+      error st @@
+        sprintf "Identifiers cannot contain '#'. Did you mean \"%s\" (quoted)?" lex
+    else
+      IDENT_STRING lex
   }
   $ { EOF }
   any { error st "Illegal character" }

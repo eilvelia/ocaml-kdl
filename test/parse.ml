@@ -213,9 +213,14 @@ let%expect_test "# in identifiers" =
   test {|- #true=3|};
   [%expect {|
     Error: :1:3-1:9: Unknown keyword #hello
-    Error: :1:10-1:16: Unknown keyword #hello
-    Error: :1:4-1:6: Unknown keyword #a
-    Error: :1:8-1:9: Expected a value |}]
+    Error: :1:3-1:16: Identifiers cannot contain '#'. Did you mean "nixpkgs#hello" (quoted)?
+    Error: :1:3-1:6: Identifiers cannot contain '#'. Did you mean "r#a" (quoted)?
+    Error: :1:8-1:9: Expected a value
+    |}]
+
+let%expect_test "r raw string in kdl >= v2" =
+  test {|- r"hello"|};
+  [%expect {| Error: :1:3-1:5: r-prefixed strings are invalid in KDL >= v2 |}]
 
 let%expect_test "identifiers cannot contain special characters ([, etc.)" =
   test {|- a[=]1|};
@@ -577,6 +582,10 @@ let%test_module "strings" = (module struct
     test {|- "\u{}"|};
     [%expect {| Error: :1:4-1:6: Invalid escape sequence |}]
 
+  let%expect_test "\\/ escape is rejected" =
+    test {|- "hello\/world"|};
+    [%expect {| Error: :1:9-1:11: Invalid escape sequence |}]
+
   let%expect_test "whitespace escape should remove space from the string" =
     test {|- "foo \   bar"|};
     [%expect {| (- (string "foo bar")) |}]
@@ -681,6 +690,111 @@ let%test_module "unicode" = (module struct
   let%expect_test "Invalid UTF-8 with a surrogate" =
     test "node \"\"\"\n\xED\xA0\x81\n\"\"\"";
     [%expect {| Error: :2:1-2:2: Malformed UTF-8 |}]
+end)
+
+let%test_module "v1 compat" = (module struct
+  let test_v1 str =
+    match Kdl.of_string ~compat:`V1 str with
+    | Ok result -> result
+      |> Kdl.sexp_of_t
+      |> Sexplib0.Sexp.to_string_hum
+      |> print_endline
+    | Error err ->
+      Format.printf "Error: %a\n" Kdl.pp_error err
+
+  let%expect_test "bare true/false/null as values" =
+    test_v1 {|node true false null|};
+    [%expect {| (node (bool true) (bool false) (null)) |}]
+
+  let%expect_test "bare true/false/null as property values" =
+    test_v1 {|node key=true bar=false baz=null|};
+    [%expect {|
+      (node (prop key (bool true)) (prop bar (bool false)) (prop baz (null))) |}]
+
+  let%expect_test "#true/#false/#null are identifiers in v1" =
+    test_v1 {|node #true #false #null|};
+    [%expect {| (node (string #true) (string #false) (string #null)) |}]
+
+  let%expect_test "# in identifiers" =
+    test_v1 {|foo#bar 1|};
+    test_v1 {|## 1|};
+    test_v1 {|#foo 1|};
+    test_v1 {|a#b#c 1|};
+    test_v1 {|# 0|};
+    [%expect {|
+      (foo#bar (number-int 1))
+      (## (number-int 1))
+      (#foo (number-int 1))
+      (a#b#c (number-int 1))
+      (# (number-int 0))
+      |}]
+
+  let%expect_test "inf/-inf/nan are valid identifiers" =
+    test_v1 {|inf 1 2|};
+    test_v1 {|-inf 1|};
+    test_v1 {|nan 1|};
+    test_v1 {|node key=inf|};
+    [%expect {|
+      (inf (number-int 1) (number-int 2))
+      (-inf (number-int 1))
+      (nan (number-int 1))
+      (node (prop key (string inf))) |}]
+
+  let%expect_test "raw string r\"...\"" =
+    test_v1 {|node r"hello world"|};
+    [%expect {| (node (string "hello world")) |}]
+
+  let%expect_test "raw string r#\"...\"#" =
+    test_v1 {|node r#"hello "world""#|};
+    [%expect {| (node (string "hello \"world\"")) |}]
+
+  let%expect_test "raw string r##\"...\"##" =
+    test_v1 {|node r##"has "# inside"##|};
+    [%expect {| (node (string "has \"# inside")) |}]
+
+  let%expect_test "raw string r\"\" (empty)" =
+    test_v1 {|node r""|};
+    [%expect {| (node (string "")) |}]
+
+  let%expect_test "\\/ escape in strings" =
+    test_v1 {|node "hello\/world"|};
+    [%expect {| (node (string hello/world)) |}]
+
+  let%expect_test "newlines in quoted strings" =
+    test_v1 "node \"line1\nline2\"";
+    [%expect {|
+      (node (string  "line1\
+                    \nline2"))
+      |}]
+
+  let%expect_test "newlines in raw strings" =
+    test_v1 "node r\"line1\nline2\"";
+    [%expect {|
+      (node (string  "line1\
+                    \nline2"))
+      |}]
+
+  let%expect_test "r as a standalone identifier" =
+    test_v1 {|r 1 2|};
+    [%expect {| (r (number-int 1) (number-int 2)) |}]
+
+  let%expect_test "r as an identifier in v2" =
+    test {|r "hello"|};
+    [%expect {| (r (string hello)) |}]
+
+  let%expect_test "v1 value types together" =
+    test_v1 {|node true 1 "str" r"raw"|};
+    [%expect {|
+      (node (bool true) (number-int 1) (string str) (string raw)) |}]
+
+  let%expect_test "bare keywords are not valid as node names" =
+    test_v1 {|true 1|};
+    test_v1 {|false 1|};
+    test_v1 {|null 1|};
+    [%expect {|
+      Error: :1:1-1:5: A keyword is not a valid node name
+      Error: :1:1-1:6: A keyword is not a valid node name
+      Error: :1:1-1:5: A keyword is not a valid node name |}]
 end)
 
 let%expect_test "the type annotations example" =

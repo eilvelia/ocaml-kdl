@@ -147,31 +147,34 @@ val pp_error : Format.formatter -> error -> unit
 
 exception Parse_error of error
 
-val of_string : ?fname:string -> string -> (t, error) result
+val of_string : ?compat:[ `V1 ] -> ?fname:string -> string -> (t, error) result
 (** Parse KDL from a string. The string should be UTF-8-encoded. [?fname] is
-    an optional filename that is used in locations. *)
+    an optional filename that is used in locations. [?compat] modifies the KDL
+    lexer to enable compatibility with older KDL versions: [`V1] accepts any
+    valid KDL v1 document but may also accept invalid ones. Only parsing is
+    supported for KDL v1. *)
 
-val of_string_exn : ?fname:string -> string -> t
+val of_string_exn : ?compat:[ `V1 ] -> ?fname:string -> string -> t
 (** Raising version of [of_string].
 
     @raise Parse_error *)
 
-val of_channel : ?fname:string -> in_channel -> (t, error) result
+val of_channel : ?compat:[ `V1 ] -> ?fname:string -> in_channel -> (t, error) result
 (** Parse KDL from a channel. *)
 
-val of_channel_exn : ?fname:string -> in_channel -> t
+val of_channel_exn : ?compat:[ `V1 ] -> ?fname:string -> in_channel -> t
 (** Raising version of [of_channel].
 
     @raise Parse_error *)
 
-val of_chunk_gen : ?fname:string -> (bytes -> offset:int -> len:int -> int) -> (t, error) result
-(** [of_chunk_gen ?fname f] is an advanced function that parses KDL from byte
+val of_chunk_gen : ?compat:[ `V1 ] -> ?fname:string -> (bytes -> offset:int -> len:int -> int) -> (t, error) result
+(** [of_chunk_gen ?compat ?fname f] is an advanced function that parses KDL from byte
     chunks written by [f]. The function [f] is similar to {!In_channel.input};
     [f] must write no more than [~len] bytes at offset [~offset], returning the
     number of written bytes. A return value of 0 means end of input. See also
     {!Lexing.from_function}. *)
 
-val of_chunk_gen_exn : ?fname:string -> (bytes -> offset:int -> len:int -> int) -> t
+val of_chunk_gen_exn : ?compat:[ `V1 ] -> ?fname:string -> (bytes -> offset:int -> len:int -> int) -> t
 (** Raising version of [of_chunk_gen].
 
     @raise Parse_error *)

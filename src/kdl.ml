@@ -15,26 +15,26 @@ let parse state : (t, error) result =
     (* note: this doesn't seem to print correct locations with lookahead tokens *)
     Error ("Syntax error", Lexer.get_location state)
 
-let of_string ?fname input =
-  parse (Lexer.tokenizer_state_of_string ?fname input)
+let of_string ?compat ?fname input =
+  parse (Lexer.tokenizer_state_of_string ?compat ?fname input)
 
-let of_string_exn ?fname input =
-  match of_string ?fname input with
+let of_string_exn ?compat ?fname input =
+  match of_string ?compat ?fname input with
   | Ok x -> x
   | Error err -> raise @@ Parse_error err
 
-let of_channel ?fname input =
-  parse (Lexer.tokenizer_state_of_channel ?fname input)
+let of_channel ?compat ?fname input =
+  parse (Lexer.tokenizer_state_of_channel ?compat ?fname input)
 
-let of_channel_exn ?fname input =
-  match of_channel ?fname input with
+let of_channel_exn ?compat ?fname input =
+  match of_channel ?compat ?fname input with
   | Ok x -> x
   | Error err -> raise @@ Parse_error err
 
-let of_chunk_gen ?fname f =
-  parse (Lexer.tokenizer_state_of_fun ?fname f)
+let of_chunk_gen ?compat ?fname f =
+  parse (Lexer.tokenizer_state_of_fun ?compat ?fname f)
 
-let of_chunk_gen_exn ?fname f =
-  match of_chunk_gen ?fname f with
+let of_chunk_gen_exn ?compat ?fname f =
+  match of_chunk_gen ?compat ?fname f with
   | Ok x -> x
   | Error err -> raise @@ Parse_error err
