@@ -83,3 +83,17 @@ let%expect_test "u32" =
     6: `U32 0
     7: Invalid_annotation: 50.6 is not valid u32
     |}]
+
+let%expect_test "unsigned values with a leading + sign" =
+  tests [
+    "(u64)18446744073709551615";
+    "(u64)+18446744073709551615";
+    "(u64)+0xffffffffffffffff";
+    "(u64)+340282366920938463463374607431768211456";
+  ];
+  [%expect {|
+    1: `U64 -1
+    2: `U64 -1
+    3: `U64 -1
+    4: Invalid_annotation: +340282366920938463463374607431768211456 is not valid u64
+    |}]

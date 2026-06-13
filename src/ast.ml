@@ -74,6 +74,11 @@ module Num = struct
       (* Somewhat hacky. Makes sure decimal numbers are prefixed with 0u.
          Examples: 42 -> 0u42, 0x42 -> 0x42.
          Fails for negative non-zero numbers. *)
+      let lit =
+        if String.length lit >= 2 && lit.[0] = '+' then
+          String.sub lit 1 (String.length lit - 1)
+        else lit
+      in
       let len = String.length lit in
       if len >= 1 && lit.[0] = '-' && not (len = 2 && lit.[1] = '0') then
         None
