@@ -138,14 +138,14 @@ open struct
 end
 
 let nth n = {
-  get = (fun list -> List.nth_opt list n);
+  get = (fun list -> if n < 0 then None else List.nth_opt list n);
   set = (fun x' list -> nth_and_replace n x' list)
 }
 
 (* these operations are O(n), and update is quite inefficient *)
 let arg n = {
   (* Inlined [nth] instead of [args // nth n] *)
-  get = (fun node -> List.nth_opt node.args n);
+  get = (fun node -> if n < 0 then None else List.nth_opt node.args n);
   set = (fun arg' node -> match nth_and_replace n arg' node.args with
     | Some args -> Some { node with args }
     | None -> None)
