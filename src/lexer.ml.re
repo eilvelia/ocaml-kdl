@@ -96,16 +96,17 @@ let make_refiller f =
   let refill st =
     (* Bytes before the token start can be discarded *)
     let start = st.info.token_cnum in
+    let retained = st.yylimit - start in
     if st.reached_eof then false else begin
-      if Bytes.length st.yyinput - start >= min_avail then
+      if Bytes.length st.yyinput - retained >= min_avail then
         (* Shift the buffer *)
-        Bytes.blit st.yyinput start st.yyinput 0 (st.yylimit - start)
+        Bytes.blit st.yyinput start st.yyinput 0 retained
       else begin
         (* Too long token, grow the buffer *)
         let newlen = Int.min (Bytes.length st.yyinput lsl 1) Sys.max_string_length in
         if newlen <= Bytes.length st.yyinput then failwith "Cannot grow buffer";
         let newbuf = Bytes.create newlen in
-        Bytes.blit st.yyinput start newbuf 0 (st.yylimit - start);
+        Bytes.blit st.yyinput start newbuf 0 retained;
         st.yyinput <- newbuf;
       end;
       (* Update positions *)
