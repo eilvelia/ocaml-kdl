@@ -343,7 +343,7 @@ let rollback_start_to_newline st =
   "\"" { Buffer.add_string strbuf "\\\""; escape_string st strbuf }
   [\b] { Buffer.add_string strbuf "\\b"; escape_string st strbuf }
   [\f] { Buffer.add_string strbuf "\\f"; escape_string st strbuf }
-  disallowed_char {
+  disallowed_char | newline_char {
     let udecode = Bytes.get_utf_8_uchar st.yyinput st.yystart in
     if not (Uchar.utf_decode_is_valid udecode) then
       failwith "Malformed UTF-8";

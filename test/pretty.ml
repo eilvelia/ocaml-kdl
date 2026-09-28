@@ -49,6 +49,10 @@ let%expect_test "should escape disallowed characters" =
   test {|node "foo\u{FEFF}bar\u{2067}"|};
   [%expect {| node "foo\u{FEFF}bar\u{2067}" |}]
 
+let%expect_test "should escape newline characters" =
+  test {|node "\r\n\u{0B}\u{0C}\u{85}\u{2028}\u{2029}"|};
+  [%expect {| node "\r\n\u{B}\f\u{85}\u{2028}\u{2029}" |}]
+
 let%expect_test "a very long node" =
   test {|long_node 1 2 3 4 #"key"#=value #true #null #false 3.2 3e+4 \
          90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 {
